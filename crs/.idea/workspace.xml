@@ -7,11 +7,13 @@
     <cargoProject FILE="$PROJECT_DIR$/../Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/../src/parser.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../src/parser/lexer.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../src/parser/parser.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../testing/main.c" afterDir="false" />
+    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="fixed lexer issue">
+      <change afterPath="$PROJECT_DIR$/../src/ast.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/parser/lexer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser/lexer.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/parser/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser/parser.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,6 +31,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "omnomctr"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/omnomctr/crs",
+    "accountId": "4effc023-192c-4ed8-8dc1-a395bc61faaa"
+  }
+}]]></component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/src/parser/lexer.rs" root0="FORCE_HIGHLIGHTING" />
   </component>
@@ -43,25 +57,25 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Cargo.Run.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/chloe/programming/crs/crs&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
-    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;editor.preferences.completion&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Run.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/chloe/programming/crs/crs",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "settings.editor.selected.configurable": "editor.preferences.completion",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/../../" />
@@ -70,7 +84,7 @@
   </component>
   <component name="RunManager">
     <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-      <option name="command" value="run --package crs --bin crs -- --lex $PROJECT_DIR$/../testing/main.c" />
+      <option name="command" value="run --package crs --bin crs -- --parse $PROJECT_DIR$/../testing/main.c" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -99,12 +113,34 @@
       <option name="presentableId" value="Default" />
       <updated>1739559411785</updated>
       <workItem from="1739559412846" duration="7508000" />
-      <workItem from="1739566928057" duration="1522000" />
+      <workItem from="1739566928057" duration="5524000" />
     </task>
+    <task id="LOCAL-00001" summary="finished lexer + started parser">
+      <option name="closed" value="true" />
+      <created>1739568563134</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1739568563134</updated>
+    </task>
+    <task id="LOCAL-00002" summary="fixed lexer issue">
+      <option name="closed" value="true" />
+      <created>1739568635519</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1739568635519</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="finished lexer + started parser" />
+    <MESSAGE value="fixed lexer issue" />
+    <option name="LAST_COMMIT_MESSAGE" value="fixed lexer issue" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

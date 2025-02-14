@@ -4,24 +4,25 @@ pub mod parser;
 pub use lexer::*;
 
 #[derive(Debug)]
-pub enum ParserErrorKind<'a> {
+pub enum ParserErrorKind {
     UnexpectedEOF,
     #[allow(dead_code)]
     IllegalCharacter(char),
     EmptyProgram,
-    UnexpectedToken(UnexpectedToken<'a>)
+    UnexpectedToken(UnexpectedToken),
+    IllegalToken(TokenType),
 }
 
 #[derive(Debug)]
-struct UnexpectedToken<'a> {
-    expected: TokenType<'a>,
-    found: TokenType<'a>,
+struct UnexpectedToken {
+    expected: TokenType,
+    found: TokenType,
 }
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct ParserError<'a> {
-    reason: ParserErrorKind<'a>,
+pub struct ParserError {
+    reason: ParserErrorKind,
     line: usize,
     filename: String,
 }

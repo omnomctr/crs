@@ -2,10 +2,11 @@ use std::str::Chars;
 use std::iter::Peekable;
 use crate::parser::{ParserError, ParserErrorKind};
 use std::iter::Iterator;
+use std::rc::Rc;
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum TokenType<'a> {
-    Identifier(&'a str),
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum TokenType {
+    Identifier(Rc<String>),
     Constant(i32),
     IntKeyword,
     VoidKeyword,
@@ -22,13 +23,13 @@ pub enum TokenType<'a> {
 }
 
 #[derive(Debug)]
-pub struct Token<'a> {
-    pub kind: TokenType<'a>,
+pub struct Token {
+    pub kind: TokenType,
     pub line_num: usize,
 }
 
-impl<'a> Token<'a> {
-    pub fn new(l: &Lexer<'a>, kind: TokenType<'a>) -> Self {
+impl Token {
+    pub fn new(l: &Lexer, kind: TokenType) -> Self {
         Token {
             line_num: l.line_num,
             kind,
@@ -66,7 +67,7 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    pub fn next_token(&mut self) -> Result<Token<'a>, ParserError> {
+    pub fn next_token(&mut self) -> Result<Token, ParserError> {
         self.skip_whitespace()?;
 
         use TokenType as Tok;
@@ -103,7 +104,7 @@ impl<'a> Lexer<'a> {
         Ok(Token::new(&self, ret))
     }
 
-    fn read_constant(&mut self) -> Result<Token<'a>, ParserError> {
+    fn read_constant(&mut self) -> Result<Token, ParserError> {
         let starting_pos = self.pos;
 
         while self.ch.is_digit(10) {
@@ -116,7 +117,7 @@ impl<'a> Lexer<'a> {
         Ok(Token::new(&self, TokenType::Constant(constant.clone())))
     }
 
-    fn read_ident(&mut self) -> Result<Token<'a>, ParserError> {
+    fn read_ident(&mut self) -> Result<Token, ParserError> {
         let starting_pos = self.pos;
 
         while Token::is_ident_char(self.ch) {
@@ -129,7 +130,7 @@ impl<'a> Lexer<'a> {
             "int" => Tok::IntKeyword,
             "void" => Tok::VoidKeyword,
             "return" => Tok::RetKeyword,
-            _ => Tok::Identifier(ident),
+            _ => Tok::Identifier(Rc::new(ident.into())),
         };
 
         Ok(Token::new(&self, tok))
@@ -169,7 +170,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, ParserError<'a>>;
+    type Item = Result<Token, ParserError>;
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.next_token();
         match ret {

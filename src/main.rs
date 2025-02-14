@@ -1,10 +1,12 @@
 mod parser;
+mod ast;
 
 pub use parser::Lexer;
 use std::env::args;
 use std::io::Read;
 use std::process::exit;
 use std::fs::File;
+use crate::parser::parser::Parser;
 
 #[derive(Debug, Eq, PartialEq)]
 enum CompilationStage {
@@ -52,11 +54,22 @@ fn main() {
     let mut infile_str = String::new();
     File::open(infile.as_str()).unwrap().read_to_string(&mut infile_str).unwrap();
 
-    let lex = Lexer::new(infile_str.as_str(), infile.as_str()).unwrap();
+    match compilation_stage {
+        CompilationStage::Lex => {
+            let lex = Lexer::new(infile_str.as_str(), infile.as_str()).unwrap();
+            for token in lex {
+                println!("{:?}", token.unwrap());
+            }
+        },
+        CompilationStage::Parse => {
+            let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
+            println!("{:#?}", ast);
+        }
+        _ => panic!("oops")
+    };
 
-    for token in lex {
-        println!("{:?}", token.unwrap());
-    }
+
+
 
     println!("compilation stage: {:?}, infile: {}, outfile: {}", compilation_stage, infile, outfile);
 }
