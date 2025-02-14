@@ -169,7 +169,7 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'a> Iterator for Lexer<'a> {
-    type Item = Result<Token<'a>, ParserError>;
+    type Item = Result<Token<'a>, ParserError<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.next_token();
         match ret {
