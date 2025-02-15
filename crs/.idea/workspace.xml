@@ -7,15 +7,7 @@
     <cargoProject FILE="$PROJECT_DIR$/../Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="IR works">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/assembly.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/assembly.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/emit.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/emit.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/ir.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/ir.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../testing/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/../testing/main.c" afterDir="false" />
-    </list>
+    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="IR -&gt; Assembly -&gt; emission works woo" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -117,7 +109,7 @@
       <option name="presentableId" value="Default" />
       <updated>1739559411785</updated>
       <workItem from="1739559412846" duration="7508000" />
-      <workItem from="1739566928057" duration="18178000" />
+      <workItem from="1739566928057" duration="18964000" />
     </task>
     <task id="LOCAL-00001" summary="finished lexer + started parser">
       <option name="closed" value="true" />
@@ -167,7 +159,15 @@
       <option name="project" value="LOCAL" />
       <updated>1739582234556</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="IR -&gt; Assembly -&gt; emission works woo">
+      <option name="closed" value="true" />
+      <created>1739590575073</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1739590575073</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -181,7 +181,8 @@
     <MESSAGE value="assembly emission works for basic returns now" />
     <MESSAGE value="fixed parsing issues" />
     <MESSAGE value="IR works" />
-    <option name="LAST_COMMIT_MESSAGE" value="IR works" />
+    <MESSAGE value="IR -&gt; Assembly -&gt; emission works woo" />
+    <option name="LAST_COMMIT_MESSAGE" value="IR -&gt; Assembly -&gt; emission works woo" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

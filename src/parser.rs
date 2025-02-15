@@ -3,16 +3,21 @@ pub mod parser;
 
 pub use lexer::*;
 
+/* I need to add these because the compiler still says its
+ * never read from if its only from Debug printing
+ */
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum ParserErrorKind {
     UnexpectedEOF,
-    #[allow(dead_code)]
+
     IllegalCharacter(char),
     EmptyProgram,
     UnexpectedToken(UnexpectedToken),
     IllegalToken(TokenType),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct UnexpectedToken {
     expected: TokenType,
