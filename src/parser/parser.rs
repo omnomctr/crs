@@ -88,31 +88,32 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
-        let ret = match self.current_token.kind {
-            TokenType::Constant(i) => Expr::Constant(i),
+        match self.current_token.kind {
+            TokenType::Constant(i) => {
+                let ret = Expr::Constant(i);
+                self.advance_token();
+                Ok(ret)
+            },
             TokenType::LParen => {
                 self.eat(TokenType::LParen)?;
                 let expr = self.parse_expr()?;
                 self.eat(TokenType::RParen)?;
-                expr
+                Ok(expr)
             },
             TokenType::Complement => {
                 self.eat(TokenType::Complement)?;
-                Expr::Unary(UnaryOp::Complement, Box::new(self.parse_expr()?))
+                Ok(Expr::Unary(UnaryOp::Complement, Box::new(self.parse_expr()?)))
             }
             TokenType::Minus => {
                 self.eat(TokenType::Minus)?;
-                Expr::Unary(UnaryOp::Negate, Box::new(self.parse_expr()?))
+                Ok(Expr::Unary(UnaryOp::Negate, Box::new(self.parse_expr()?)))
             }
             _ => return Err(ParserError::new(
                 self.current_token.line_num,
                 ParserErrorKind::IllegalToken(self.current_token.kind.clone()),
                 self.lex.filename
             ))
-        };
-
-        self.advance_token();
-        Ok(ret)
+        }
     }
 
     fn advance_token(&mut self) {
