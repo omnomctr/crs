@@ -14,7 +14,7 @@ pub enum ParserErrorKind {
 }
 
 #[derive(Debug)]
-struct UnexpectedToken {
+pub struct UnexpectedToken {
     expected: TokenType,
     found: TokenType,
 }

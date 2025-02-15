@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::BufWriter;
 use crate::assembly;
-use crate::assembly::{Instruction, Operand, Register};
+use crate::assembly::{Instruction, Operand, Register, UnaryOp};
 use std::io::Write;
 
 pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
@@ -9,6 +9,7 @@ pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
 
     write!(&mut writer, "\t.globl {}\n", prog.function_definition.name)?;
     write!(&mut writer, "{}:\n", prog.function_definition.name)?;
+    write!(&mut writer, "\tpushq  %rbp\n\tmovq   %rsp, %rbp\n")?;
 
     for inst in prog.function_definition.instructions {
         write!(&mut writer, "\t")?;
@@ -24,12 +25,26 @@ pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
 fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -> std::io::Result<()> {
     match inst {
         Instruction::Mov(src, dest) => {
-            write!(writer, "movl  ")?;
+            write!(writer, "movl   ")?;
             emit_operand(writer, src)?;
             write!(writer, ", ")?;
             emit_operand(writer, dest)?;
         },
-        Instruction::Ret => write!(writer, "ret")?,
+        Instruction::Ret => {
+            write!(writer, "movq   %rbp, %rsp\n\t")?;
+            write!(writer, "popq   %rbp\n\t")?;
+            write!(writer, "ret")?;
+        },
+        Instruction::Unary(op, operand) => {
+            write!(writer, "{}   ", match op {
+                UnaryOp::Not => "notl",
+                UnaryOp::Neg => "negl",
+            })?;
+            emit_operand(writer, operand)?;
+        },
+        Instruction::AllocateStack(i) => {
+            write!(writer, "subq   ${}, %rsp", i)?;
+        },
     }
 
     Ok(())
@@ -39,6 +54,8 @@ fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand) -> std::io:
     match op {
         Operand::Imm(i) => write!(writer, "${}", i)?,
         Operand::Reg(r) => emit_register(writer, r)?,
+        Operand::Stack(i) => write!(writer, "-{}(%rbp)", i)?,
+        Operand::Pseudo(_) => panic!(),
     }
 
     Ok(())
@@ -46,6 +63,7 @@ fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand) -> std::io:
 
 fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register) -> std::io::Result<()> {
     match reg {
-        Register::EAX => write!(writer, "%eax"),
+        Register::AX => write!(writer, "%eax"),
+        Register::R10 => write!(writer, "%r10d"),
     }
 }

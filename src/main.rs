@@ -24,7 +24,7 @@ enum CompilationStage {
 
 fn parse_outfile(s: String) -> Option<String> {
     if !s.ends_with(".c") || s.len() <= 2 {
-        None
+        Some(s)
     } else {
         Some(s[0..s.len() - 2].into())
     }
@@ -78,8 +78,9 @@ fn main() {
         },
         CompilationStage::Unspecified => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
+            let ir = emit_ir(ast);
+            let asm = to_assembly_program(ir);
             let out = File::create(outfile).unwrap();
-            let asm = to_assembly_program(ast);
             emit(out, asm).unwrap();
         }
     };

@@ -8,13 +8,13 @@ use crate::ast::{Expr, Statement};
 
 #[derive(Debug)]
 pub struct Program {
-    function_definition: Function,
+    pub function_definition: Function,
 }
 
 #[derive(Debug)]
 pub struct Function {
-    name: Identifier,
-    body: Vec<Instruction>,
+    pub name: Identifier,
+    pub body: Vec<Instruction>,
 }
 
 #[derive(Debug)]
