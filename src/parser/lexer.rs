@@ -19,7 +19,10 @@ pub enum TokenType {
     Eof,
     Complement,
     Minus,
-    Decrement,
+    Plus,
+    Times,
+    Divide,
+    Mod,
 }
 
 #[derive(Debug)]
@@ -29,9 +32,9 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(l: &Lexer, kind: TokenType) -> Self {
+    pub fn new(line_num: usize, kind: TokenType) -> Self {
         Token {
-            line_num: l.line_num,
+            line_num,
             kind,
         }
     }
@@ -73,7 +76,7 @@ impl<'a> Lexer<'a> {
         use TokenType as Tok;
         let ret = match self.ch {
             '\0' => {
-                return Ok(Token::new(&self, Tok::Eof))
+                return Ok(Token::new(self.line_num, Tok::Eof))
             },
             '(' => Tok::LParen,
             ')' => Tok::RParen,
@@ -81,14 +84,11 @@ impl<'a> Lexer<'a> {
             '}' => Tok::RSquirly,
             ';' => Tok::Semicolon,
             '~' => Tok::Complement,
-            '-' => {
-                if self.peek_char() == Some('-') {
-                    self.read_char()?;
-                    Tok::Decrement
-                } else {
-                    Tok::Minus
-                }
-            },
+            '-' => Tok::Minus,
+            '+' => Tok::Plus,
+            '/' => Tok::Divide,
+            '*' => Tok::Times,
+            '%' => Tok::Mod,
             x => {
                 if self.ch.is_digit(10) {
                     return self.read_constant();
@@ -101,7 +101,7 @@ impl<'a> Lexer<'a> {
         };
 
         self.read_char()?;
-        Ok(Token::new(&self, ret))
+        Ok(Token::new(self.line_num, ret))
     }
 
     fn read_constant(&mut self) -> Result<Token, ParserError> {
@@ -114,7 +114,7 @@ impl<'a> Lexer<'a> {
         let constant = &self.input[starting_pos..self.pos]
             .parse::<i32>().unwrap();
 
-        Ok(Token::new(&self, TokenType::Constant(constant.clone())))
+        Ok(Token::new(self.line_num, TokenType::Constant(constant.clone())))
     }
 
     fn read_ident(&mut self) -> Result<Token, ParserError> {
@@ -133,7 +133,7 @@ impl<'a> Lexer<'a> {
             _ => Tok::Identifier(Rc::new(ident.into())),
         };
 
-        Ok(Token::new(&self, tok))
+        Ok(Token::new(self.line_num, tok))
     }
 
     fn read_char(&mut self) -> Result<(), ParserError> {
@@ -148,13 +148,13 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
-    fn peek_char(&mut self) -> Option<char> {
+    pub fn peek_char(&mut self) -> Option<char> {
         self.iter.peek().cloned()
     }
 
     fn skip_whitespace(&mut self) -> Result<(), ParserError> {
-        while self.ch.is_whitespace() || self.ch == '/' {
-            if self.peek_char() == Some('/') {
+        while self.ch.is_whitespace() || (self.ch == '/' && self.peek_char() == Some('/')) {
+            if self.ch == '/' && self.peek_char() == Some('/') {
                 while self.ch != '\n' && self.ch != '\0' {
                     self.read_char()?;
                 }

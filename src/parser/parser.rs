@@ -1,10 +1,12 @@
+use std::iter::Peekable;
 use super::{Lexer, ParserError, ParserErrorKind, Token, TokenType, UnexpectedToken};
 use crate::ast;
 use std::rc::Rc;
-use crate::ast::{Expr, UnaryOp};
+use crate::ast::{BinaryOp, Expr, UnaryOp};
 
 pub struct Parser<'a> {
-    lex: &'a mut Lexer<'a>,
+    lex: Peekable<&'a mut Lexer<'a>>,
+    filename: &'a str,
     current_token: Token,
 }
 
@@ -17,11 +19,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn new(input: &'a mut Lexer<'a>) -> Result<Self, ParserError> {
-        let lex = input;
-        let current_token = lex.next_token()?;
+        let filename = input.filename;
+        let mut lex = input.peekable();
+
+        let current_token = lex.next()
+            .ok_or_else(|| ParserError::new(1, ParserErrorKind::UnexpectedEOF, filename))??;
 
         Ok(Parser {
-            lex, current_token,
+            lex, current_token, filename
         })
     }
 
@@ -41,12 +46,12 @@ impl<'a> Parser<'a> {
                                             found: self.current_token.kind.clone(),
                                         }
                                     ),
-                                    self.lex.filename
+                                    self.filename
             ))
         } else if self.current_token.kind == TokenType::Eof {
             Ok(())
         } else {
-            self.advance_token();
+            self.advance_token()?;
             Ok(())
         }
     }
@@ -55,13 +60,13 @@ impl<'a> Parser<'a> {
         self.eat(TokenType::IntKeyword)?;
 
         let name = if let TokenType::Identifier(i) = self.current_token.kind.clone() {
-            self.advance_token();
+            self.advance_token()?;
             Rc::clone(&i)
         } else {
             return Err(ParserError::new(
                 self.current_token.line_num,
                 ParserErrorKind::IllegalToken(self.current_token.kind.clone()),
-                self.lex.filename
+                self.filename
             ));
         };
 
@@ -74,6 +79,7 @@ impl<'a> Parser<'a> {
 
         self.eat(TokenType::RSquirly)?;
 
+
         Ok(ast::Function {
             name, stmt
         })
@@ -83,41 +89,93 @@ impl<'a> Parser<'a> {
         self.eat(TokenType::RetKeyword)?;
         let expr = self.parse_expr()?;
         self.eat(TokenType::Semicolon)?;
-
         Ok(ast::Statement::Return(expr))
     }
 
-    fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
-        match self.current_token.kind {
-            TokenType::Constant(i) => {
-                let ret = Expr::Constant(i);
-                self.advance_token();
-                Ok(ret)
+    fn factor(&mut self) -> Result<ast::Expr, ParserError> {
+        Ok(match self.current_token.kind {
+            TokenType::Constant(c) => {
+                self.advance_token()?;
+                Expr::Constant(c)
             },
+            TokenType::Minus => {
+                self.advance_token()?;
+                let expr = self.parse_expr()?;
+                Expr::Unary(UnaryOp::Negate, Box::new(expr))
+            },
+            TokenType::Complement => {
+                self.advance_token()?;
+                let expr = self.parse_expr()?;
+                Expr::Unary(UnaryOp::Complement, Box::new(expr))
+            }
             TokenType::LParen => {
                 self.eat(TokenType::LParen)?;
                 let expr = self.parse_expr()?;
                 self.eat(TokenType::RParen)?;
-                Ok(expr)
-            },
-            TokenType::Complement => {
-                self.eat(TokenType::Complement)?;
-                Ok(Expr::Unary(UnaryOp::Complement, Box::new(self.parse_expr()?)))
+
+                expr
             }
-            TokenType::Minus => {
-                self.eat(TokenType::Minus)?;
-                Ok(Expr::Unary(UnaryOp::Negate, Box::new(self.parse_expr()?)))
+            _ => {
+                return Err(ParserError::new(self.current_token.line_num, ParserErrorKind::BadForm, self.filename))
             }
-            _ => return Err(ParserError::new(
-                self.current_token.line_num,
-                ParserErrorKind::IllegalToken(self.current_token.kind.clone()),
-                self.lex.filename
-            ))
-        }
+        })
     }
 
-    fn advance_token(&mut self) {
+    fn term(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.factor()?;
+        while self.current_token.kind == TokenType::Times
+            || self.current_token.kind == TokenType::Divide
+            || self.current_token.kind == TokenType::Mod {
+            match self.current_token.kind {
+                TokenType::Times => {
+                    self.eat(TokenType::Times)?;
+                    let rhs = self.factor()?;
+                    ret = Expr::Binary(BinaryOp::Multiply, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::Divide => {
+                    self.eat(TokenType::Divide)?;
+
+                    let rhs = self.factor()?;
+                    ret = Expr::Binary(BinaryOp::Divide, Box::new(ret), Box::new(rhs));
+                }
+                TokenType::Mod => {
+                    self.eat(TokenType::Mod)?;
+                    let rhs = self.factor()?;
+                    ret = Expr::Binary(BinaryOp::Remainder, Box::new(ret), Box::new(rhs));
+                }
+                _ => panic!()
+            }
+        }
+
+        Ok(ret)
+    }
+
+    fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.term()?;
+        while self.current_token.kind == TokenType::Plus
+            || self.current_token.kind == TokenType::Minus {
+            match self.current_token.kind {
+                TokenType::Plus => {
+                    self.eat(TokenType::Plus)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::Add, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::Minus => {
+                    self.eat(TokenType::Minus)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::Subtract, Box::new(ret), Box::new(rhs));
+                }
+                _ => panic!()
+            }
+        }
+
+        Ok(ret)
+    }
+
+    fn advance_token(&mut self) -> Result<(), ParserError> {
         assert_ne!(self.current_token.kind, TokenType::Eof);
-        self.current_token = self.lex.next_token().unwrap();
+        self.current_token = self.lex
+            .next().unwrap_or(Ok(Token::new(self.current_token.line_num, TokenType::Eof)))?;
+        Ok(())
     }
 }

@@ -18,6 +18,9 @@ pub struct FunctionDefinition {
 pub enum Instruction {
     Mov(Operand, Operand), /* src, dst */
     Unary(UnaryOp, Operand),
+    Binary(BinaryOp, Operand, Operand), /* op, rhs, dst */
+    Idiv(Operand),
+    Cdq,
     AllocateStack(usize),
     Ret,
 }
@@ -38,10 +41,17 @@ pub enum UnaryOp {
     Not,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum BinaryOp {
+    Add, Sub, Mult
+}
+
 #[derive(Debug)]
 pub enum Register {
     AX,
     R10,
+    R11,
+    DX,
 }
 
 pub fn to_assembly_program(prog: ir::Program) -> Program {
@@ -69,26 +79,74 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                 }
                 Instruction::AllocateStack(_) => {}
                 Instruction::Ret => {}
+                Instruction::Binary(_, rhs, dst) => {
+                    convert_pseudoregister(rhs, &mut pr_map, &mut stack_offset);
+                    convert_pseudoregister(dst, &mut pr_map, &mut stack_offset);
+                }
+
+                Instruction::Idiv(v) => {
+                    convert_pseudoregister(v, &mut pr_map, &mut stack_offset);
+                }
+                Instruction::Cdq => {}
             }
         }
     }
-    // third pass - add AllocateStack instruction, fix movs with two deref operands
+    // third pass - add AllocateStack instruction, fix various x86 instruction restraints
     let instructions = {
         let mut instructions_ = Vec::with_capacity(instructions.len() + 1);
         instructions_.push(Instruction::AllocateStack(stack_offset));
 
         for inst in instructions {
-            if let Instruction::Mov(Operand::Stack(src), Operand::Stack(dst)) = inst {
-                instructions_.push(Instruction::Mov(
-                    Operand::Stack(src),
-                    Operand::Reg(Register::R10),
-                ));
-                instructions_.push(Instruction::Mov(
-                    Operand::Reg(Register::R10),
-                    Operand::Stack(dst)
-                ));
-            } else {
-                instructions_.push(inst);
+            match inst {
+                Instruction::Mov(Operand::Stack(src), Operand::Stack(dst)) => {
+                    // only one mov argument can be a memory address
+                    instructions_.push(Instruction::Mov(
+                        Operand::Stack(src),
+                        Operand::Reg(Register::R10),
+                    ));
+                    instructions_.push(Instruction::Mov(
+                        Operand::Reg(Register::R10),
+                        Operand::Stack(dst)
+                    ));
+                },
+                Instruction::Idiv(Operand::Imm(i)) => {
+                    // if the idiv arg is a constant (it doesnt like that)
+                    instructions_.push(Instruction::Mov(
+                        Operand::Imm(i),
+                        Operand::Reg(Register::R10),
+                    ));
+                    instructions_.push(Instruction::Idiv(
+                        Operand::Reg(Register::R10)
+                    ));
+                },
+                Instruction::Binary(binop @ BinaryOp::Add | binop @ BinaryOp::Sub, Operand::Stack(lhs), Operand::Stack(rhs)) => {
+                    // Add and Sub instructions cant use memory addresses as source and destination
+                    instructions_.push(Instruction::Mov(
+                        Operand::Stack(lhs),
+                        Operand::Reg(Register::R10)
+                    ));
+                    instructions_.push(Instruction::Binary(
+                        binop,
+                        Operand::Reg(Register::R10),
+                        Operand::Stack(rhs)
+                    ));
+                },
+                Instruction::Binary(BinaryOp::Mult, lhs, Operand::Stack(rhs)) => {
+                    instructions_.push(Instruction::Mov(
+                        Operand::Stack(rhs),
+                        Operand::Reg(Register::R11),
+                    ));
+                    instructions_.push(Instruction::Binary(
+                        BinaryOp::Mult,
+                        lhs,
+                        Operand::Reg(Register::R11),
+                    ));
+                    instructions_.push(Instruction::Mov(
+                        Operand::Reg(Register::R11),
+                        Operand::Stack(rhs),
+                    ));
+                },
+                _ => instructions_.push(inst),
             }
         }
 
@@ -123,6 +181,52 @@ fn generate_instructions(body: &Vec<ir::Instruction>, out: &mut Vec<Instruction>
                     convert_unary_op(op),
                     convert_val(dst),
                 ))
+            }
+            I::Binary(op, lhs, rhs, dst) => {
+                if let ir::BinaryOp::Divide = op {
+                    out.push(Instruction::Mov(
+                        convert_val(lhs),
+                        Operand::Reg(Register::AX)
+                    ));
+                    out.push(Instruction::Cdq);
+                    out.push(Instruction::Idiv(
+                        convert_val(rhs)
+                    ));
+                    out.push(Instruction::Mov(
+                       Operand::Reg(Register::AX),
+                       convert_val(dst),
+                    ));
+                } else if let ir::BinaryOp::Remainder = op {
+                    out.push(Instruction::Mov(
+                        convert_val(lhs),
+                        Operand::Reg(Register::AX)
+                    ));
+                    out.push(Instruction::Cdq);
+                    out.push(Instruction::Idiv(
+                        convert_val(rhs)
+                    ));
+                    out.push(Instruction::Mov(
+                        Operand::Reg(Register::DX),
+                        convert_val(dst)
+                    ));
+                } else {
+                    out.push(Instruction::Mov(
+                        convert_val(lhs),
+                        convert_val(dst),
+                    ));
+                    use ir::BinaryOp as B;
+                    let op_ = match op {
+                        B::Add => BinaryOp::Add,
+                        B::Subtract => BinaryOp::Sub,
+                        B::Multiply => BinaryOp::Mult,
+                        B::Divide | B::Remainder => panic!()
+                    };
+                    out.push(Instruction::Binary(
+                        op_,
+                        convert_val(rhs),
+                        convert_val(dst),
+                    ));
+                }
             }
         }
     }

@@ -15,6 +15,7 @@ pub enum ParserErrorKind {
     EmptyProgram,
     UnexpectedToken(UnexpectedToken),
     IllegalToken(TokenType),
+    BadForm,
 }
 
 #[allow(dead_code)]

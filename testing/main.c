@@ -1,5 +1,4 @@
 int main(void)
 {
-    // hello
-    return ~(-2);
+    return (6 - 2) % 2;
 }

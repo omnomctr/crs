@@ -21,6 +21,7 @@ pub struct Function {
 pub enum Instruction {
     Return(Val),
     Unary(UnaryOp, Val, Val), /* op, src, dst */
+    Binary(BinaryOp, Val, Val, Val), /* op, lhs, rhs, dst */
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,15 @@ pub enum Val {
 pub enum UnaryOp {
     Complement,
     Negate
+}
+
+#[derive(Debug)]
+pub enum BinaryOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
 }
 
 struct EmitterState {
@@ -81,6 +91,19 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             dst
         },
+        Expr::Binary(op, lhs, rhs) => {
+            let lhs = emit_expr(lhs, es, insts);
+            let rhs = emit_expr(rhs, es, insts);
+            let dst = make_temporary(es);
+            insts.push(Instruction::Binary(
+                convert_binary(op),
+                lhs,
+                rhs,
+                dst.clone()
+            ));
+
+            dst
+        },
     }
 }
 
@@ -96,4 +119,16 @@ fn convert_unary(op: &ast::UnaryOp) -> UnaryOp {
         ast::UnaryOp::Complement => UnaryOp::Complement,
         ast::UnaryOp::Negate => UnaryOp::Negate,
     }
+}
+
+fn convert_binary(op: &ast::BinaryOp) -> BinaryOp {
+    use ast::BinaryOp as B;
+    match op {
+        B::Add => BinaryOp::Add,
+        B::Subtract => BinaryOp::Subtract,
+        B::Multiply => BinaryOp::Multiply,
+        B::Divide => BinaryOp::Divide,
+        B::Remainder => BinaryOp::Remainder,
+    }
+
 }

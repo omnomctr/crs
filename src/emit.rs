@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::BufWriter;
 use crate::assembly;
-use crate::assembly::{Instruction, Operand, Register, UnaryOp};
+use crate::assembly::{BinaryOp, Instruction, Operand, Register, UnaryOp};
 use std::io::Write;
 
 pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
@@ -46,6 +46,23 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
         Instruction::AllocateStack(i) => {
             write!(writer, "subq   ${}, %rsp", i)?;
         },
+        Instruction::Binary(op, rhs, dst) => {
+            write!(writer, "{}   ", match op {
+                BinaryOp::Add => "addl",
+                BinaryOp::Sub => "subl",
+                BinaryOp::Mult => "imull",
+            })?;
+            emit_operand(writer, rhs)?;
+            write!(writer, ", ")?;
+            emit_operand(writer, dst)?;
+        },
+        Instruction::Idiv(op) => {
+            write!(writer, "idivl   ")?;
+            emit_operand(writer, op)?;
+        },
+        Instruction::Cdq => {
+            write!(writer, "cdq")?;
+        }
     }
 
     Ok(())
@@ -66,5 +83,7 @@ fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register) -> std::
     match reg {
         Register::AX => write!(writer, "%eax"),
         Register::R10 => write!(writer, "%r10d"),
+        Register::R11 => write!(writer, "%r11d"),
+        Register::DX => write!(writer, "%edx"),
     }
 }
