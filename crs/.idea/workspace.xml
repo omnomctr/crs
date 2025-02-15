@@ -7,13 +7,13 @@
     <cargoProject FILE="$PROJECT_DIR$/../Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="fixed lexer issue">
-      <change afterPath="$PROJECT_DIR$/../src/ast.rs" afterDir="false" />
+    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="fixed warnings">
+      <change afterPath="$PROJECT_DIR$/../src/assembly.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../src/emit.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../testing/crt.asm" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/parser/lexer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser/lexer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/parser/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/parser/parser.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../testing/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/../testing/main.c" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -48,6 +48,9 @@
   </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="pSkPcwAQ" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 0
@@ -84,7 +87,7 @@
   </component>
   <component name="RunManager">
     <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-      <option name="command" value="run --package crs --bin crs -- --parse $PROJECT_DIR$/../testing/main.c" />
+      <option name="command" value="run --package crs --bin crs -- $PROJECT_DIR$/../testing/main.c" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -113,7 +116,7 @@
       <option name="presentableId" value="Default" />
       <updated>1739559411785</updated>
       <workItem from="1739559412846" duration="7508000" />
-      <workItem from="1739566928057" duration="5524000" />
+      <workItem from="1739566928057" duration="8328000" />
     </task>
     <task id="LOCAL-00001" summary="finished lexer + started parser">
       <option name="closed" value="true" />
@@ -131,7 +134,15 @@
       <option name="project" value="LOCAL" />
       <updated>1739568635519</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="fixed warnings">
+      <option name="closed" value="true" />
+      <created>1739576978858</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1739576978858</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -140,7 +151,9 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="finished lexer + started parser" />
     <MESSAGE value="fixed lexer issue" />
-    <option name="LAST_COMMIT_MESSAGE" value="fixed lexer issue" />
+    <MESSAGE value="finished parser w/ support for unary exprs" />
+    <MESSAGE value="fixed warnings" />
+    <option name="LAST_COMMIT_MESSAGE" value="fixed warnings" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

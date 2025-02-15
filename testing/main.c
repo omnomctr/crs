@@ -1,5 +1,5 @@
 int main(void)
 {
     // hello
-    return 22;
+    return 20;
 }
