@@ -2,6 +2,7 @@ mod parser;
 mod ast;
 mod assembly;
 mod emit;
+mod ir;
 
 pub use parser::Lexer;
 use std::env::args;
@@ -11,6 +12,7 @@ use std::fs::File;
 use crate::parser::parser::Parser;
 use emit::emit;
 use crate::assembly::to_assembly_program;
+use crate::ir::emit_ir;
 
 #[derive(Debug, Eq, PartialEq)]
 enum CompilationStage {
@@ -69,7 +71,11 @@ fn main() {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
             println!("{:#?}", ast);
         }
-        CompilationStage::Tacky => panic!(),
+        CompilationStage::Tacky => {
+            let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
+            let ir = emit_ir(ast);
+            println!("{:#?}", ir);
+        },
         CompilationStage::Unspecified => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
             let out = File::create(outfile).unwrap();

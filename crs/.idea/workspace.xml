@@ -7,10 +7,8 @@
     <cargoProject FILE="$PROJECT_DIR$/../Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="fixed warnings">
-      <change afterPath="$PROJECT_DIR$/../src/assembly.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../src/emit.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../testing/crt.asm" afterDir="false" />
+    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="IR works">
+      <change afterPath="$PROJECT_DIR$/../src/ir.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../testing/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/../testing/main.c" afterDir="false" />
@@ -87,7 +85,7 @@
   </component>
   <component name="RunManager">
     <configuration name="Run" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-      <option name="command" value="run --package crs --bin crs -- $PROJECT_DIR$/../testing/main.c" />
+      <option name="command" value="run --package crs --bin crs -- --tacky $PROJECT_DIR$/../testing/main.c" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -116,7 +114,7 @@
       <option name="presentableId" value="Default" />
       <updated>1739559411785</updated>
       <workItem from="1739559412846" duration="7508000" />
-      <workItem from="1739566928057" duration="8328000" />
+      <workItem from="1739566928057" duration="11030000" />
     </task>
     <task id="LOCAL-00001" summary="finished lexer + started parser">
       <option name="closed" value="true" />
@@ -142,7 +140,23 @@
       <option name="project" value="LOCAL" />
       <updated>1739576978858</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="assembly emission works for basic returns now">
+      <option name="closed" value="true" />
+      <created>1739579624655</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1739579624655</updated>
+    </task>
+    <task id="LOCAL-00005" summary="fixed parsing issues">
+      <option name="closed" value="true" />
+      <created>1739580451664</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1739580451664</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -153,7 +167,10 @@
     <MESSAGE value="fixed lexer issue" />
     <MESSAGE value="finished parser w/ support for unary exprs" />
     <MESSAGE value="fixed warnings" />
-    <option name="LAST_COMMIT_MESSAGE" value="fixed warnings" />
+    <MESSAGE value="assembly emission works for basic returns now" />
+    <MESSAGE value="fixed parsing issues" />
+    <MESSAGE value="IR works" />
+    <option name="LAST_COMMIT_MESSAGE" value="IR works" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
