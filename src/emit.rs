@@ -19,6 +19,7 @@ pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
 
     write!(&mut writer, ".section .note.GNU-stack,\"\",@progbits\n")?;
 
+    writer.flush()?;
     Ok(())
 }
 

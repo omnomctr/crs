@@ -7,7 +7,10 @@
     <cargoProject FILE="$PROJECT_DIR$/../Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="IR -&gt; Assembly -&gt; emission works woo" />
+    <list default="true" id="a1424db1-869f-4fb7-9be4-5569bbd5841b" name="Changes" comment="silenced rustc warnings">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/emit.rs" beforeDir="false" afterPath="$PROJECT_DIR$/../src/emit.rs" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -109,7 +112,7 @@
       <option name="presentableId" value="Default" />
       <updated>1739559411785</updated>
       <workItem from="1739559412846" duration="7508000" />
-      <workItem from="1739566928057" duration="18964000" />
+      <workItem from="1739566928057" duration="19117000" />
     </task>
     <task id="LOCAL-00001" summary="finished lexer + started parser">
       <option name="closed" value="true" />
@@ -167,7 +170,15 @@
       <option name="project" value="LOCAL" />
       <updated>1739590575073</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="silenced rustc warnings">
+      <option name="closed" value="true" />
+      <created>1739591433118</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1739591433118</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -182,7 +193,8 @@
     <MESSAGE value="fixed parsing issues" />
     <MESSAGE value="IR works" />
     <MESSAGE value="IR -&gt; Assembly -&gt; emission works woo" />
-    <option name="LAST_COMMIT_MESSAGE" value="IR -&gt; Assembly -&gt; emission works woo" />
+    <MESSAGE value="silenced rustc warnings" />
+    <option name="LAST_COMMIT_MESSAGE" value="silenced rustc warnings" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
