@@ -38,4 +38,7 @@ pub enum BinaryOp {
     Remainder,
     BitwiseAnd,
     BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
 }

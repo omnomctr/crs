@@ -25,6 +25,9 @@ pub enum TokenType {
     Mod,
     BitwiseAnd,
     BitwiseOr,
+    BitwiseXor,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Debug)]
@@ -76,6 +79,8 @@ impl<'a> Lexer<'a> {
         self.skip_whitespace()?;
 
         use TokenType as Tok;
+        // we need to get the value because .peek() need mutable reference for some reason
+        let peek = self.peek_char();
         let ret = match self.ch {
             '\0' => {
                 return Ok(Token::new(self.line_num, Tok::Eof))
@@ -93,6 +98,9 @@ impl<'a> Lexer<'a> {
             '%' => Tok::Mod,
             '&' => Tok::BitwiseAnd,
             '|' => Tok::BitwiseOr,
+            '^' => Tok::BitwiseXor,
+            '<' if peek == Some('<') => { self.read_char()?; Tok::LeftShift },
+            '>' if peek == Some('>') => { self.read_char()?; Tok::RightShift },
             x => {
                 if self.ch.is_digit(10) {
                     return self.read_constant();

@@ -45,6 +45,9 @@ pub enum BinaryOp {
     Remainder,
     BitwiseAnd,
     BitWiseOr,
+    BitWiseXor,
+    LeftShift,
+    RightShift,
 }
 
 struct EmitterState {
@@ -133,6 +136,9 @@ fn convert_binary(op: &ast::BinaryOp) -> BinaryOp {
         B::Remainder => BinaryOp::Remainder,
         B::BitwiseAnd => BinaryOp::BitwiseAnd,
         B::BitwiseOr => BinaryOp::BitWiseOr,
+        B::BitwiseXor => BinaryOp::BitWiseXor,
+        B::LeftShift => BinaryOp::LeftShift,
+        B::RightShift => BinaryOp::RightShift,
     }
 
 }

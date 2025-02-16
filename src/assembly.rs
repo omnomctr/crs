@@ -43,7 +43,7 @@ pub enum UnaryOp {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
-    Add, Sub, Mult, And, Or,
+    Add, Sub, Mult, And, Or, Xor, LShift, RShift,
 }
 
 #[derive(Debug)]
@@ -107,7 +107,7 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                             Operand::Reg(Register::DX),
                             convert_val(dst)
                         ));
-                    } else if let ir::BinaryOp::BitwiseAnd | ir::BinaryOp::BitWiseOr = op {
+                    } else if let ir::BinaryOp::BitwiseAnd | ir::BinaryOp::BitWiseOr | ir::BinaryOp::BitWiseXor = op {
                         // dest <- dest & src
                         instructions.push(Instruction::Mov(
                             convert_val(rhs),
@@ -117,9 +117,25 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                             match op {
                                 ir::BinaryOp::BitWiseOr => BinaryOp::Or,
                                 ir::BinaryOp::BitwiseAnd => BinaryOp::And,
+                                ir::BinaryOp::BitWiseXor => BinaryOp::Xor,
                                 _ => panic!(),
                             },
                             convert_val(lhs),
+                            convert_val(dst),
+                        ));
+                    } else if let ir::BinaryOp::LeftShift | ir::BinaryOp::RightShift = op {
+                        // dest <- dest << / >> rhs
+                        instructions.push(Instruction::Mov(
+                            convert_val(lhs),
+                            convert_val(dst),
+                        ));
+                        instructions.push(Instruction::Binary(
+                            match op {
+                                ir::BinaryOp::LeftShift => BinaryOp::LShift,
+                                ir::BinaryOp::RightShift => BinaryOp::RShift,
+                                _ => panic!()
+                            },
+                            convert_val(rhs),
                             convert_val(dst),
                         ));
                     } else {
@@ -133,7 +149,8 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                             B::Add => BinaryOp::Add,
                             B::Subtract => BinaryOp::Sub,
                             B::Multiply => BinaryOp::Mult,
-                            B::Divide | B::Remainder | B::BitwiseAnd | B::BitWiseOr => panic!()
+                            B::Divide | B::Remainder | B::BitwiseAnd | B::BitWiseOr
+                            | B::BitWiseXor | B::RightShift | B::LeftShift => panic!()
                         };
                         instructions.push(Instruction::Binary(
                             op_,
@@ -214,7 +231,7 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                         Operand::Stack(rhs)
                     ));
                 },
-                Instruction::Binary(op @ BinaryOp::And | op @ BinaryOp::Or, lhs, Operand::Stack(rhs)) => {
+                Instruction::Binary(op @ BinaryOp::And | op @ BinaryOp::Or | op @ BinaryOp::Xor, lhs, Operand::Stack(rhs)) => {
                     /* dest must be a register */
                     instructions_.push(Instruction::Mov(
                         Operand::Stack(rhs),

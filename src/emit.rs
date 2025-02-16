@@ -53,6 +53,9 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
                 BinaryOp::Mult => "imull",
                 BinaryOp::And => "andl",
                 BinaryOp::Or => "orl ",
+                BinaryOp::Xor => "xorl",
+                BinaryOp::LShift => "shll",
+                BinaryOp::RShift => "shrl",
             })?;
             emit_operand(writer, rhs)?;
             write!(writer, ", ")?;

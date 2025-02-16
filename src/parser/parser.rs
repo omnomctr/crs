@@ -155,7 +155,10 @@ impl<'a> Parser<'a> {
         while self.current_token.kind == TokenType::Plus
             || self.current_token.kind == TokenType::Minus
             || self.current_token.kind == TokenType::BitwiseAnd
-            || self.current_token.kind == TokenType::BitwiseOr {
+            || self.current_token.kind == TokenType::BitwiseOr
+            || self.current_token.kind == TokenType::BitwiseXor
+            || self.current_token.kind == TokenType::LeftShift
+            || self.current_token.kind == TokenType::RightShift {
             match self.current_token.kind {
                 TokenType::Plus => {
                     self.eat(TokenType::Plus)?;
@@ -176,7 +179,22 @@ impl<'a> Parser<'a> {
                     self.eat(TokenType::BitwiseOr)?;
                     let rhs = self.term()?;
                     ret = Expr::Binary(BinaryOp::BitwiseOr, Box::new(ret), Box::new(rhs));
-                }
+                },
+                TokenType::BitwiseXor => {
+                    self.eat(TokenType::BitwiseXor)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::BitwiseXor, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::LeftShift => {
+                    self.eat(TokenType::LeftShift)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::LeftShift, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::RightShift => {
+                    self.eat(TokenType::RightShift)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::RightShift, Box::new(ret), Box::new(rhs));
+                },
                 _ => panic!()
             }
         }
