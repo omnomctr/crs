@@ -165,9 +165,18 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) -> Result<(), ParserError> {
-        while self.ch.is_whitespace() || (self.ch == '/' && self.peek_char() == Some('/')) {
+        while self.ch.is_whitespace() || (self.ch == '/' && self.peek_char() == Some('/')) || (self.ch == '/' && self.peek_char() == Some('*')) {
+            // TODO: make this better
             if self.ch == '/' && self.peek_char() == Some('/') {
                 while self.ch != '\n' && self.ch != '\0' {
+                    self.read_char()?;
+                }
+            } else if self.ch == '/' && self.peek_char() == Some('*') {
+                while !(self.ch == '*' && self.peek_char() == Some('/')) && self.ch != '\0' {
+                    self.read_char()?;
+                }
+                if self.ch == '*' {
+                    self.read_char()?;
                     self.read_char()?;
                 }
             }

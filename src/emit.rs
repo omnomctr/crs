@@ -90,5 +90,7 @@ fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register) -> std::
         Register::R10 => write!(writer, "%r10d"),
         Register::R11 => write!(writer, "%r11d"),
         Register::DX => write!(writer, "%edx"),
+        Register::CX => write!(writer, "%ecx"),
+        Register::CL => write!(writer, "%cl"),
     }
 }

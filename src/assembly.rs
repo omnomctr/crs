@@ -52,6 +52,8 @@ pub enum Register {
     R10,
     R11,
     DX,
+    CX,
+    CL,
 }
 
 pub fn to_assembly_program(prog: ir::Program) -> Program {
@@ -245,6 +247,22 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     instructions_.push(Instruction::Mov(
                         Operand::Reg(Register::R10),
                         Operand::Stack(rhs),
+                    ));
+                },
+                Instruction::Binary(op @ BinaryOp::LShift | op @ BinaryOp::RShift, Operand::Stack(rhs), dst) => {
+                    /* pg 1828 of intel manual "The destination operand can be a
+                     * register or a memory location. The count operand can be an immediate value or
+                     * the CL register"
+                     */
+                    // CL is the lowest 8 bits of CX
+                    instructions_.push(Instruction::Mov(
+                        Operand::Stack(rhs),
+                        Operand::Reg(Register::CX),
+                    ));
+                    instructions_.push(Instruction::Binary(
+                        op,
+                        Operand::Reg(Register::CL),
+                        dst,
                     ));
                 },
                 Instruction::Binary(BinaryOp::Mult, lhs, Operand::Stack(rhs)) => {
