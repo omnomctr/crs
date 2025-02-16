@@ -74,7 +74,7 @@ fn main() {
         CompilationStage::Tacky => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
             let ir = emit_ir(ast);
-            println!("{:#?}", ir);
+            println!("{}", ir);
         },
         CompilationStage::Unspecified => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();

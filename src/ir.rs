@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ast;
 use crate::ast::{Expr, Statement};
@@ -140,5 +141,60 @@ fn convert_binary(op: &ast::BinaryOp) -> BinaryOp {
         B::LeftShift => BinaryOp::LeftShift,
         B::RightShift => BinaryOp::RightShift,
     }
+}
 
+impl Display for Program {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} (\n", self.function_definition.name)?;
+        for inst in &self.function_definition.body {
+            write!(f, "\t{}\n", inst)?;
+        }
+        write!(f, ")")?;
+        Ok(())
+    }
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Instruction::Return(val) => write!(f, "return {}", val),
+            Instruction::Unary(op, src, dst) => write!(f, "{} = {}{}", dst, op, src),
+            Instruction::Binary(op, lhs, rhs, dst) => write!(f, "{} = {} {} {}", dst, lhs, op, rhs),
+        }
+    }
+}
+
+impl Display for Val {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Val::Constant(i) => write!(f, "{}", i),
+            Val::Var(name) => write!(f, "{}", name),
+        }
+    }
+}
+
+impl Display for UnaryOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnaryOp::Complement => write!(f, "~"),
+            UnaryOp::Negate => write!(f, "-"),
+        }
+    }
+}
+
+impl Display for BinaryOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BinaryOp::Add => write!(f, "+"),
+            BinaryOp::Subtract => write!(f, "-"),
+            BinaryOp::Multiply => write!(f, "*"),
+            BinaryOp::Divide => write!(f, "/"),
+            BinaryOp::Remainder => write!(f, "%"),
+            BinaryOp::BitwiseAnd => write!(f, "&"),
+            BinaryOp::BitWiseOr => write!(f, "|"),
+            BinaryOp::BitWiseXor => write!(f, "^"),
+            BinaryOp::LeftShift => write!(f, "<<"),
+            BinaryOp::RightShift => write!(f, ">>"),
+        }
+    }
 }
