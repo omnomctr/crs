@@ -7,7 +7,7 @@ crt.o: crt.asm
 main.o: main
 	as main -o main.o
 
-main: main.c
+main: main.c ../target/debug/crs
 	../target/debug/crs main.c
 
 clean:

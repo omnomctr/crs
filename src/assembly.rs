@@ -43,7 +43,7 @@ pub enum UnaryOp {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
-    Add, Sub, Mult
+    Add, Sub, Mult, And, Or,
 }
 
 #[derive(Debug)]
@@ -60,7 +60,90 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
 
     // first pass
     {
-        generate_instructions(&prog.function_definition.body, &mut instructions);
+        for inst in &prog.function_definition.body {
+            use ir::Instruction as I;
+            match inst {
+                I::Return(val) => {
+                    instructions.push(Instruction::Mov(
+                        convert_val(val),
+                        Operand::Reg(Register::AX)
+                    ));
+                    instructions.push(Instruction::Ret);
+                },
+                I::Unary(op, src, dst) => {
+                    instructions.push(Instruction::Mov(
+                        convert_val(src),
+                        convert_val(dst)
+                    ));
+                    instructions.push(Instruction::Unary(
+                        convert_unary_op(op),
+                        convert_val(dst),
+                    ))
+                }
+                I::Binary(op, lhs, rhs, dst) => {
+                    if let ir::BinaryOp::Divide = op {
+                        instructions.push(Instruction::Mov(
+                            convert_val(lhs),
+                            Operand::Reg(Register::AX)
+                        ));
+                        instructions.push(Instruction::Cdq);
+                        instructions.push(Instruction::Idiv(
+                            convert_val(rhs)
+                        ));
+                        instructions.push(Instruction::Mov(
+                            Operand::Reg(Register::AX),
+                            convert_val(dst),
+                        ));
+                    } else if let ir::BinaryOp::Remainder = op {
+                        instructions.push(Instruction::Mov(
+                            convert_val(lhs),
+                            Operand::Reg(Register::AX)
+                        ));
+                        instructions.push(Instruction::Cdq);
+                        instructions.push(Instruction::Idiv(
+                            convert_val(rhs)
+                        ));
+                        instructions.push(Instruction::Mov(
+                            Operand::Reg(Register::DX),
+                            convert_val(dst)
+                        ));
+                    } else if let ir::BinaryOp::BitwiseAnd | ir::BinaryOp::BitWiseOr = op {
+                        // dest <- dest & src
+                        instructions.push(Instruction::Mov(
+                            convert_val(rhs),
+                            convert_val(dst),
+                        ));
+                        instructions.push(Instruction::Binary(
+                            match op {
+                                ir::BinaryOp::BitWiseOr => BinaryOp::Or,
+                                ir::BinaryOp::BitwiseAnd => BinaryOp::And,
+                                _ => panic!(),
+                            },
+                            convert_val(lhs),
+                            convert_val(dst),
+                        ));
+                    } else {
+                        // dest <- dest + src;
+                        instructions.push(Instruction::Mov(
+                            convert_val(lhs),
+                            convert_val(dst),
+                        ));
+                        use ir::BinaryOp as B;
+                        let op_ = match op {
+                            B::Add => BinaryOp::Add,
+                            B::Subtract => BinaryOp::Sub,
+                            B::Multiply => BinaryOp::Mult,
+                            B::Divide | B::Remainder | B::BitwiseAnd | B::BitWiseOr => panic!()
+                        };
+                        instructions.push(Instruction::Binary(
+                            op_,
+                            convert_val(rhs),
+                            convert_val(dst),
+                        ));
+                    }
+                }
+            }
+        }
     }
     // second pass
     // replace pseudoregisters with stack operands
@@ -110,7 +193,7 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     ));
                 },
                 Instruction::Idiv(Operand::Imm(i)) => {
-                    // if the idiv arg is a constant (it doesnt like that)
+                    // idiv argument cant be an immediate value
                     instructions_.push(Instruction::Mov(
                         Operand::Imm(i),
                         Operand::Reg(Register::R10),
@@ -120,7 +203,7 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     ));
                 },
                 Instruction::Binary(binop @ BinaryOp::Add | binop @ BinaryOp::Sub, Operand::Stack(lhs), Operand::Stack(rhs)) => {
-                    // Add and Sub instructions cant use memory addresses as source and destination
+                    // Add and Sub instructions cant use memory addresses as both source and destination
                     instructions_.push(Instruction::Mov(
                         Operand::Stack(lhs),
                         Operand::Reg(Register::R10)
@@ -129,6 +212,22 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                         binop,
                         Operand::Reg(Register::R10),
                         Operand::Stack(rhs)
+                    ));
+                },
+                Instruction::Binary(op @ BinaryOp::And | op @ BinaryOp::Or, lhs, Operand::Stack(rhs)) => {
+                    /* dest must be a register */
+                    instructions_.push(Instruction::Mov(
+                        Operand::Stack(rhs),
+                        Operand::Reg(Register::R10),
+                    ));
+                    instructions_.push(Instruction::Binary(
+                        op,
+                        lhs,
+                        Operand::Reg(Register::R10),
+                    ));
+                    instructions_.push(Instruction::Mov(
+                        Operand::Reg(Register::R10),
+                        Operand::Stack(rhs),
                     ));
                 },
                 Instruction::Binary(BinaryOp::Mult, lhs, Operand::Stack(rhs)) => {
@@ -157,77 +256,6 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
         function_definition: FunctionDefinition {
             name,
             instructions
-        }
-    }
-}
-
-fn generate_instructions(body: &Vec<ir::Instruction>, out: &mut Vec<Instruction>) {
-    for inst in body {
-        use ir::Instruction as I;
-        match inst {
-            I::Return(val) => {
-                out.push(Instruction::Mov(
-                    convert_val(val),
-                    Operand::Reg(Register::AX)
-                ));
-                out.push(Instruction::Ret);
-            },
-            I::Unary(op, src, dst) => {
-                out.push(Instruction::Mov(
-                    convert_val(src),
-                    convert_val(dst)
-                ));
-                out.push(Instruction::Unary(
-                    convert_unary_op(op),
-                    convert_val(dst),
-                ))
-            }
-            I::Binary(op, lhs, rhs, dst) => {
-                if let ir::BinaryOp::Divide = op {
-                    out.push(Instruction::Mov(
-                        convert_val(lhs),
-                        Operand::Reg(Register::AX)
-                    ));
-                    out.push(Instruction::Cdq);
-                    out.push(Instruction::Idiv(
-                        convert_val(rhs)
-                    ));
-                    out.push(Instruction::Mov(
-                       Operand::Reg(Register::AX),
-                       convert_val(dst),
-                    ));
-                } else if let ir::BinaryOp::Remainder = op {
-                    out.push(Instruction::Mov(
-                        convert_val(lhs),
-                        Operand::Reg(Register::AX)
-                    ));
-                    out.push(Instruction::Cdq);
-                    out.push(Instruction::Idiv(
-                        convert_val(rhs)
-                    ));
-                    out.push(Instruction::Mov(
-                        Operand::Reg(Register::DX),
-                        convert_val(dst)
-                    ));
-                } else {
-                    out.push(Instruction::Mov(
-                        convert_val(lhs),
-                        convert_val(dst),
-                    ));
-                    use ir::BinaryOp as B;
-                    let op_ = match op {
-                        B::Add => BinaryOp::Add,
-                        B::Subtract => BinaryOp::Sub,
-                        B::Multiply => BinaryOp::Mult,
-                        B::Divide | B::Remainder => panic!()
-                    };
-                    out.push(Instruction::Binary(
-                        op_,
-                        convert_val(rhs),
-                        convert_val(dst),
-                    ));
-                }
-            }
         }
     }
 }

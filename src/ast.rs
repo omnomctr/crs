@@ -26,7 +26,7 @@ pub enum Expr {
 #[derive(Debug)]
 pub enum UnaryOp {
     Complement,
-    Negate
+    Negate,
 }
 
 #[derive(Debug)]
@@ -36,4 +36,6 @@ pub enum BinaryOp {
     Multiply,
     Divide,
     Remainder,
+    BitwiseAnd,
+    BitwiseOr,
 }

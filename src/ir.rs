@@ -43,6 +43,8 @@ pub enum BinaryOp {
     Multiply,
     Divide,
     Remainder,
+    BitwiseAnd,
+    BitWiseOr,
 }
 
 struct EmitterState {
@@ -129,6 +131,8 @@ fn convert_binary(op: &ast::BinaryOp) -> BinaryOp {
         B::Multiply => BinaryOp::Multiply,
         B::Divide => BinaryOp::Divide,
         B::Remainder => BinaryOp::Remainder,
+        B::BitwiseAnd => BinaryOp::BitwiseAnd,
+        B::BitwiseOr => BinaryOp::BitWiseOr,
     }
 
 }

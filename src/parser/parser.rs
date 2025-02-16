@@ -153,7 +153,9 @@ impl<'a> Parser<'a> {
     fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
         let mut ret = self.term()?;
         while self.current_token.kind == TokenType::Plus
-            || self.current_token.kind == TokenType::Minus {
+            || self.current_token.kind == TokenType::Minus
+            || self.current_token.kind == TokenType::BitwiseAnd
+            || self.current_token.kind == TokenType::BitwiseOr {
             match self.current_token.kind {
                 TokenType::Plus => {
                     self.eat(TokenType::Plus)?;
@@ -164,6 +166,16 @@ impl<'a> Parser<'a> {
                     self.eat(TokenType::Minus)?;
                     let rhs = self.term()?;
                     ret = Expr::Binary(BinaryOp::Subtract, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::BitwiseAnd => {
+                    self.eat(TokenType::BitwiseAnd)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::BitwiseAnd, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::BitwiseOr => {
+                    self.eat(TokenType::BitwiseOr)?;
+                    let rhs = self.term()?;
+                    ret = Expr::Binary(BinaryOp::BitwiseOr, Box::new(ret), Box::new(rhs));
                 }
                 _ => panic!()
             }

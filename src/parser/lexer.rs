@@ -23,6 +23,8 @@ pub enum TokenType {
     Times,
     Divide,
     Mod,
+    BitwiseAnd,
+    BitwiseOr,
 }
 
 #[derive(Debug)]
@@ -89,6 +91,8 @@ impl<'a> Lexer<'a> {
             '/' => Tok::Divide,
             '*' => Tok::Times,
             '%' => Tok::Mod,
+            '&' => Tok::BitwiseAnd,
+            '|' => Tok::BitwiseOr,
             x => {
                 if self.ch.is_digit(10) {
                     return self.read_constant();
