@@ -264,25 +264,38 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                         convert_val(dst),
                     ));
                 },
-                I::Binary(op, lhs, rhs, dst) => {
+                I::Binary(ir::BinaryOp::Add, lhs, rhs, dst) => {
                     // dest <- dest + src;
                     instructions.push(Instruction::Mov(
                         convert_val(lhs),
                         convert_val(dst),
                     ));
-                    use ir::BinaryOp as B;
-                    let op_ = match op {
-                        B::Add => BinaryOp::Add,
-                        B::Subtract => BinaryOp::Sub,
-                        B::Multiply => BinaryOp::Mult,
-                        B::Divide | B::Remainder | B::BitwiseAnd | B::BitWiseOr
-                        | B::BitWiseXor | B::RightShift | B::LeftShift => panic!(),
-                        B::Equal | B::NotEqual |
-                        B::LessThan | B::LessOrEqual |
-                        B::GreaterThan | B::GreaterOrEqual => panic!(),
-                    };
                     instructions.push(Instruction::Binary(
-                        op_,
+                        BinaryOp::Add,
+                        convert_val(rhs),
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::Subtract, lhs, rhs, dst) => {
+                    // dest <- dest - src;
+                    instructions.push(Instruction::Mov(
+                        convert_val(lhs),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::Binary(
+                        BinaryOp::Sub,
+                        convert_val(rhs),
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::Multiply, lhs, rhs, dst) => {
+                    // dest <- dest + src;
+                    instructions.push(Instruction::Mov(
+                        convert_val(lhs),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::Binary(
+                        BinaryOp::Mult,
                         convert_val(rhs),
                         convert_val(dst),
                     ));
