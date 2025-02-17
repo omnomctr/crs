@@ -1,5 +1,7 @@
-/* hello */
 int main(void)
 {
-    return (1 != (1 - 1)) && 5 > 2;
+    int a = 1;
+    int b = 2;
+    int c = a = b + a;
+    return a < b || a == b || c == a;
 }

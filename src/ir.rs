@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{Expr, Statement};
+use crate::ast::{BlockItem, Expr, Statement};
 
 /* intermediate representation
  * page 36 of the book
@@ -79,7 +79,29 @@ pub fn emit_ir(prog: ast::Program) -> Program {
     };
 
     let mut insts = Vec::new();
-    emit_statement(prog.f.stmt, &mut state, &mut insts);
+    for item in prog.f.body {
+        match item {
+            BlockItem::S(stmt) => emit_statement(stmt, &mut state, &mut insts),
+            BlockItem::D(ast::Declaration { name, initializer: Some(e) }) => {
+                let result = emit_expr(&e, &mut state, &mut insts);
+                insts.push(Instruction::Copy(
+                    result,
+                    Val::Var(Rc::clone(&name))
+                ));
+            },
+            _ => (),
+        }
+    }
+
+    // if it's the main function and it doesn't have a return
+    // the standard tells us we need to add it automatically
+    if name.as_str() == "main" {
+        if let Some(Instruction::Return(_)) = insts.last() {}
+        else {
+            insts.push(Instruction::Return(Val::Constant(0)));
+        }
+    }
+
 
     Program {
         function_definition: Function {
@@ -95,6 +117,10 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
             let val = emit_expr(&expr, es, insts);
             insts.push(Instruction::Return(val));
         }
+        Statement::Expression(expr) => {
+            let _ = emit_expr(&expr, es, insts); /* ignore the result */
+        }
+        Statement::Empty => (),
     }
 }
 
@@ -230,6 +256,21 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
             ));
 
             dst
+        },
+        Expr::Var(v) => Val::Var(Rc::clone(v)),
+        Expr::Assignment(v, rhs) => {
+            let result = emit_expr(&**rhs, es, insts);
+            let v = if let ast::Expr::Var(x) = v.as_ref() {
+                x
+            } else {
+                panic!()
+            };
+            insts.push(Instruction::Copy(
+                result,
+                Val::Var(Rc::clone(&v))
+            ));
+
+            Val::Var(Rc::clone(&v))
         },
     }
 }

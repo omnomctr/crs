@@ -37,6 +37,7 @@ pub enum TokenType {
     GT,
     LTE,
     GTE,
+    Assignment,
 }
 
 #[derive(Debug)]
@@ -113,6 +114,7 @@ impl<'a> Lexer<'a> {
             '|' if peek == Some('|') => { self.read_char()?; Tok::Or },
             '|' => Tok::BitwiseOr,
             '=' if peek == Some('=') => { self.read_char()?; Tok::Eq },
+            '=' => Tok::Assignment,
             '!' if peek == Some('=') => { self.read_char()?; Tok::NEq },
             '!' => Tok::Not,
             '<' if peek == Some('=') => { self.read_char()?; Tok::LTE },

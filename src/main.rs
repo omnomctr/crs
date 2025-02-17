@@ -3,6 +3,7 @@ mod ast;
 mod assembly;
 mod emit;
 mod ir;
+mod semantic_analysis;
 
 pub use parser::Lexer;
 use std::env::args;
@@ -13,11 +14,13 @@ use crate::parser::parser::Parser;
 use emit::emit;
 use crate::assembly::to_assembly_program;
 use crate::ir::emit_ir;
+use semantic_analysis::analyse;
 
 #[derive(Debug, Eq, PartialEq)]
 enum CompilationStage {
     Lex,
     Parse,
+    Validate,
     Tacky,
     Unspecified,
 }
@@ -47,6 +50,7 @@ fn main() {
             "--lex" => compilation_stage = s::Lex,
             "--parse" => compilation_stage = s::Parse,
             "--tacky" => compilation_stage = s::Tacky,
+            "--validate" => compilation_stage = s::Validate,
             _ => {
                 infile = Some(arg.clone());
                 outfile = Some(parse_outfile(arg).expect("<infile> must be a c file"));
@@ -70,15 +74,21 @@ fn main() {
         CompilationStage::Parse => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
             println!("{:#?}", ast);
+        },
+        CompilationStage::Validate => {
+            let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
+            println!("{:#?}", analyse(ast).unwrap());
         }
         CompilationStage::Tacky => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
-            let ir = emit_ir(ast);
+            let ast_ = analyse(ast).unwrap();
+            let ir = emit_ir(ast_);
             println!("{}", ir);
         },
         CompilationStage::Unspecified => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
-            let ir = emit_ir(ast);
+            let ast_ = analyse(ast).unwrap();
+            let ir = emit_ir(ast_);
             let asm = to_assembly_program(ir);
             let out = File::create(outfile).unwrap();
             emit(out, asm).unwrap();

@@ -14,7 +14,6 @@ pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
     write!(&mut writer, "\tpushq  %rbp\n\tmovq   %rsp, %rbp\n")?;
 
     for inst in prog.function_definition.instructions {
-        write!(&mut writer, "\t")?;
         emit_instruction(&mut writer, inst)?;
         write!(&mut writer, "\n")?;
     }
@@ -28,39 +27,44 @@ pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
 fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -> std::io::Result<()> {
     match inst {
         Instruction::Mov(src, dest) => {
-            write!(writer, "movl   ")?;
+            write!(writer, "\tmovl   ")?;
             emit_operand(writer, src, DWORD)?;
             write!(writer, ", ")?;
             emit_operand(writer, dest, DWORD)?;
         },
         Instruction::Ret => {
-            write!(writer, "movq   %rbp, %rsp\n\t")?;
+            write!(writer, "\tmovq   %rbp, %rsp\n\t")?;
             write!(writer, "popq   %rbp\n\t")?;
             write!(writer, "ret")?;
         },
         Instruction::Unary(op, operand) => {
-            write!(writer, "{}   ", match op {
+            write!(writer, "\t{}   ", match op {
                 UnaryOp::Not => "notl",
                 UnaryOp::Neg => "negl",
             })?;
             emit_operand(writer, operand, DWORD)?;
         },
         Instruction::AllocateStack(i) => {
-            write!(writer, "subq   ${}, %rsp", i)?;
+            write!(writer, "\tsubq   ${}, %rsp", i)?;
         },
         Instruction::SetCond(cond, op) => {
-            write!(writer, "set{}   ",
+            write!(writer, "\tset{}   ",
                 cond)?;
             emit_operand(writer, op, WORD)?;
         },
         Instruction::Binary(op, rhs, dst) => {
-            if op == BinaryOp::LShift || op == BinaryOp::RShift {
-                write!(writer, "shll ")?;
+            if op == BinaryOp::LShift  {
+                write!(writer, "\tshll ")?;
+                emit_operand(writer, rhs, WORD)?;
+                write!(writer, ", ")?;
+                emit_operand(writer, dst, DWORD)?;
+            } else if op == BinaryOp::RShift {
+                write!(writer, "\tshrl ")?;
                 emit_operand(writer, rhs, WORD)?;
                 write!(writer, ", ")?;
                 emit_operand(writer, dst, DWORD)?;
             } else {
-                write!(writer, "{}   ", match op {
+                write!(writer, "\t{}   ", match op {
                     BinaryOp::Add => "addl",
                     BinaryOp::Sub => "subl",
                     BinaryOp::Mult => "imull",
@@ -76,23 +80,23 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
 
         },
         Instruction::Idiv(op) => {
-            write!(writer, "idivl   ")?;
+            write!(writer, "\tidivl   ")?;
             emit_operand(writer, op, DWORD)?;
         },
         Instruction::Cdq => {
-            write!(writer, "cdq")?;
+            write!(writer, "\tcdq")?;
         }
         Instruction::Cmp(op1, op2) => {
-            write!(writer, "cmpl   ")?;
+            write!(writer, "\tcmpl   ")?;
             emit_operand(writer, op1, DWORD)?;
             write!(writer, ", ")?;
             emit_operand(writer, op2, DWORD)?;
         }
         Instruction::Jmp(lbl) => {
-            write!(writer, "jmp    .L{}", lbl)?;
+            write!(writer, "\tjmp    .L{}", lbl)?;
         }
         Instruction::JmpCond(cond, lbl) => {
-            write!(writer, "j{}    .L{}", cond, lbl)?;
+            write!(writer, "\tj{}    .L{}", cond, lbl)?;
         }
         Instruction::Label(lbl) => {
             write!(writer, ".L{}:", lbl)?;

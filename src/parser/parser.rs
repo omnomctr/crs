@@ -1,8 +1,8 @@
 use std::iter::Peekable;
+use std::rc::Rc;
 use super::{Lexer, ParserError, ParserErrorKind, Token, TokenType, UnexpectedToken};
 use crate::ast;
-use std::rc::Rc;
-use crate::ast::{BinaryOp, Expr, UnaryOp};
+use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, UnaryOp};
 
 pub struct Parser<'a> {
     lex: Peekable<&'a mut Lexer<'a>>,
@@ -56,47 +56,100 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function(&mut self) -> Result<ast::Function, ParserError> {
-        self.eat(TokenType::IntKeyword)?;
-
-        let name = if let TokenType::Identifier(i) = self.current_token.kind.clone() {
+    fn eat_ident(&mut self) -> Result<ast::Identifier, ParserError> {
+        if let TokenType::Identifier(i) = self.current_token.kind.clone() {
             self.advance_token()?;
-            Rc::clone(&i)
+            Ok(i)
         } else {
-            return Err(ParserError::new(
+            Err(ParserError::new(
                 self.current_token.line_num,
                 ParserErrorKind::IllegalToken(self.current_token.kind.clone()),
                 self.filename
-            ));
-        };
+            ))
+        }
+    }
+
+    fn parse_function(&mut self) -> Result<ast::Function, ParserError> {
+        self.eat(TokenType::IntKeyword)?;
+
+        let name = self.eat_ident()?;
 
         self.eat(TokenType::LParen)?;
         self.eat(TokenType::VoidKeyword)?;
         self.eat(TokenType::RParen)?;
         self.eat(TokenType::LSquirly)?;
 
-        let stmt = self.parse_statement()?;
+        let mut block_items = Vec::new();
+        while self.current_token.kind != TokenType::RSquirly {
+            block_items.push(self.parse_block_item()?);
+        }
 
         self.eat(TokenType::RSquirly)?;
 
 
         Ok(ast::Function {
-            name, stmt
+            name, body: block_items,
         })
     }
 
+    fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
+        if self.current_token.kind == TokenType::IntKeyword {
+            self.parse_declaration().map(BlockItem::D)
+        } else {
+            self.parse_statement().map(BlockItem::S)
+        }
+    }
+
+    fn parse_declaration(&mut self) -> Result<ast::Declaration, ParserError> {
+        self.eat(TokenType::IntKeyword)?;
+        let ident = self.eat_ident()?;
+
+        /* optional =, otherwise it's just a declaration */
+        if self.current_token.kind != TokenType::Assignment {
+            self.eat(TokenType::Semicolon)?;
+            Ok(Declaration {
+                name: ident,
+                initializer: None,
+            })
+        } else {
+            self.eat(TokenType::Assignment)?;
+            let expr = self.parse_expr()?;
+            self.eat(TokenType::Semicolon)?;
+            Ok(Declaration {
+                name: ident,
+                initializer: Some(expr),
+            })
+        }
+    }
+
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        self.eat(TokenType::RetKeyword)?;
-        let expr = self.parse_expr()?;
-        self.eat(TokenType::Semicolon)?;
-        Ok(ast::Statement::Return(expr))
+        match self.current_token.kind {
+            TokenType::RetKeyword => {
+                self.eat(TokenType::RetKeyword)?;
+                let expr = self.parse_expr()?;
+                self.eat(TokenType::Semicolon)?;
+                Ok(ast::Statement::Return(expr))
+            },
+            TokenType::Semicolon => Ok(ast::Statement::Empty),
+            _ => {
+                let expr = self.parse_expr()?;
+                self.eat(TokenType::Semicolon)?;
+                Ok(ast::Statement::Expression(expr))
+            },
+        }
     }
 
     fn factor(&mut self) -> Result<ast::Expr, ParserError> {
-        Ok(match self.current_token.kind {
+        let current_token = self.current_token.kind.clone();
+        Ok(match current_token {
             TokenType::Constant(c) => {
                 self.advance_token()?;
                 Expr::Constant(c)
+            },
+            TokenType::Identifier(i) => {
+                let ident = Rc::clone(&i);
+                self.advance_token()?;
+                Expr::Var(ident)
             },
             TokenType::Minus => {
                 self.advance_token()?;
@@ -276,7 +329,7 @@ impl<'a> Parser<'a> {
         Ok(ret)
     }
 
-    fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
+    fn expr0(&mut self) -> Result<ast::Expr, ParserError> {
         let mut ret = self.expr1()?;
 
         while self.current_token.kind == TokenType::Or {
@@ -287,6 +340,27 @@ impl<'a> Parser<'a> {
 
         Ok(ret)
     }
+
+    fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.expr0()?;
+
+        while self.current_token.kind == TokenType::Assignment {
+            self.eat(TokenType::Assignment)?;
+            let rhs = self.expr1()?;
+            ret = Expr::Assignment(Box::new(ret), Box::new(rhs))
+        }
+
+        Ok(ret)
+    }
+
+    /*
+    fn peek_token(&mut self) -> Option<TokenType> {
+        self.lex.peek()
+            .map(|x| x.as_ref().ok())
+            .flatten()
+            .map(|x| x.kind.clone())
+    }
+    */
 
     fn advance_token(&mut self) -> Result<(), ParserError> {
         assert_ne!(self.current_token.kind, TokenType::Eof);
