@@ -49,7 +49,6 @@ pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
 
 impl AnalysisState {
     fn resolve_declaration(&mut self, decl: ast::Declaration) -> AnalysisResult<ast::Declaration> {
-
         if self.variable_map.contains_key(&decl.name) {
             return Err(SemanticAnalysisError {
                 reason: SemanticAnalysisErrorKind::DuplicateVariableDecl(Rc::clone(&decl.name)),
