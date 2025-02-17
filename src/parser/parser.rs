@@ -114,6 +114,11 @@ impl<'a> Parser<'a> {
                 self.eat(TokenType::RParen)?;
 
                 expr
+            },
+            TokenType::Not => {
+                self.eat(TokenType::Not)?;
+                let expr = self.parse_expr()?;
+                Expr::Unary(UnaryOp::Not, Box::new(expr))
             }
             _ => {
                 return Err(ParserError::new(self.current_token.line_num, ParserErrorKind::BadForm, self.filename))
@@ -150,7 +155,7 @@ impl<'a> Parser<'a> {
         Ok(ret)
     }
 
-    fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
+    fn expr4(&mut self) -> Result<ast::Expr, ParserError> {
         let mut ret = self.term()?;
         while self.current_token.kind == TokenType::Plus
             || self.current_token.kind == TokenType::Minus
@@ -197,6 +202,87 @@ impl<'a> Parser<'a> {
                 },
                 _ => panic!()
             }
+        }
+
+        Ok(ret)
+    }
+
+    fn expr3(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.expr4()?;
+
+        while self.current_token.kind == TokenType::LT
+            || self.current_token.kind == TokenType::GT
+            || self.current_token.kind == TokenType::GTE
+            || self.current_token.kind == TokenType::LTE {
+            match self.current_token.kind {
+                TokenType::LT => {
+                    self.eat(TokenType::LT)?;
+                    let rhs = self.expr3()?;
+                    ret = Expr::Binary(BinaryOp::LT, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::GT => {
+                    self.eat(TokenType::GT)?;
+                    let rhs = self.expr3()?;
+                    ret = Expr::Binary(BinaryOp::GT, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::GTE => {
+                    self.eat(TokenType::GTE)?;
+                    let rhs = self.expr3()?;
+                    ret = Expr::Binary(BinaryOp::GTE, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::LTE => {
+                    self.eat(TokenType::LTE)?;
+                    let rhs = self.expr3()?;
+                    ret = Expr::Binary(BinaryOp::LTE, Box::new(ret), Box::new(rhs));
+                },
+                _ => panic!(),
+            }
+        }
+
+        Ok(ret)
+    }
+
+    fn expr2(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.expr3()?;
+
+        while self.current_token.kind == TokenType::Eq
+            || self.current_token.kind == TokenType::NEq {
+            match self.current_token.kind {
+                TokenType::Eq => {
+                    self.eat(TokenType::Eq)?;
+                    let rhs = self.expr3()?;
+                    ret = Expr::Binary(BinaryOp::Eq, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::NEq => {
+                    self.eat(TokenType::NEq)?;
+                    let rhs = self.expr3()?;
+                    ret = Expr::Binary(BinaryOp::NEq, Box::new(ret), Box::new(rhs));
+                },
+                _ => panic!()
+            }
+        }
+
+        Ok(ret)
+    }
+    // TODO: theres a better way to do this
+    fn expr1(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.expr2()?;
+
+        while self.current_token.kind == TokenType::And {
+            self.eat(TokenType::And)?;
+            let rhs = self.expr2()?;
+            ret = Expr::Binary(BinaryOp::And, Box::new(ret), Box::new(rhs));
+        }
+        Ok(ret)
+    }
+
+    fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
+        let mut ret = self.expr1()?;
+
+        while self.current_token.kind == TokenType::Or {
+            self.eat(TokenType::Or)?;
+            let rhs = self.expr1()?;
+            ret = Expr::Binary(BinaryOp::Or, Box::new(ret), Box::new(rhs));
         }
 
         Ok(ret)

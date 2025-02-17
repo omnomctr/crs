@@ -28,6 +28,15 @@ pub enum TokenType {
     BitwiseXor,
     LeftShift,
     RightShift,
+    Not,
+    And,
+    Or,
+    Eq,
+    NEq,
+    LT,
+    GT,
+    LTE,
+    GTE,
 }
 
 #[derive(Debug)]
@@ -96,11 +105,20 @@ impl<'a> Lexer<'a> {
             '/' => Tok::Divide,
             '*' => Tok::Times,
             '%' => Tok::Mod,
-            '&' => Tok::BitwiseAnd,
-            '|' => Tok::BitwiseOr,
             '^' => Tok::BitwiseXor,
             '<' if peek == Some('<') => { self.read_char()?; Tok::LeftShift },
             '>' if peek == Some('>') => { self.read_char()?; Tok::RightShift },
+            '&' if peek == Some('&') => { self.read_char()?; Tok::And },
+            '&' => Tok::BitwiseAnd,
+            '|' if peek == Some('|') => { self.read_char()?; Tok::Or },
+            '|' => Tok::BitwiseOr,
+            '=' if peek == Some('=') => { self.read_char()?; Tok::Eq },
+            '!' if peek == Some('=') => { self.read_char()?; Tok::NEq },
+            '!' => Tok::Not,
+            '<' if peek == Some('=') => { self.read_char()?; Tok::LTE },
+            '<' => Tok::LT,
+            '>' if peek == Some('=') => { self.read_char()?; Tok::GTE },
+            '>' => Tok::GT,
             x => {
                 if self.ch.is_digit(10) {
                     return self.read_constant();

@@ -23,6 +23,11 @@ pub enum Instruction {
     Return(Val),
     Unary(UnaryOp, Val, Val), /* op, src, dst */
     Binary(BinaryOp, Val, Val, Val), /* op, lhs, rhs, dst */
+    Copy(Val, Val), /* src, dst */
+    Jump(Label), /* target */
+    JumpZero(Val, Label), /* condition, target */
+    JumpNotZero(Val, Label), /* condition, target */
+    Label(Label)
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +39,8 @@ pub enum Val {
 #[derive(Debug)]
 pub enum UnaryOp {
     Complement,
-    Negate
+    Negate,
+    Not
 }
 
 #[derive(Debug)]
@@ -49,18 +55,27 @@ pub enum BinaryOp {
     BitWiseXor,
     LeftShift,
     RightShift,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessOrEqual,
+    GreaterThan,
+    GreaterOrEqual,
 }
 
 struct EmitterState {
     tmp_namen: usize,
+    tmp_labeln: usize,
 }
 
 type Identifier = Rc<String>;
+type Label = Rc<String>;
 
 pub fn emit_ir(prog: ast::Program) -> Program {
     let name = Rc::clone(&prog.f.name);
     let mut state = EmitterState {
         tmp_namen: 0,
+        tmp_labeln: 0,
     };
 
     let mut insts = Vec::new();
@@ -88,7 +103,7 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
         Expr::Constant(c) => Val::Constant(*c),
         Expr::Unary(op, rhs) => {
             let src = emit_expr(rhs, es, insts);
-            let dst = make_temporary(es);
+            let dst = make_temporary_val(es);
             insts.push(Instruction::Unary(
                 convert_unary(op),
                 src,
@@ -97,10 +112,116 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             dst
         },
+        Expr::Binary(ast::BinaryOp::And, lhs, rhs) => {
+            /*
+             implementing short circuiting
+
+                lhs = <eval lhs>
+                jmp if lhs == 0 fbranch
+                rhs = <eval rhs>
+                jmp if rhs == 0 fbranch
+
+                result = 1 ; true
+
+                jmp end
+
+            fbranch:
+                result = 0
+
+            end:
+                <end>, returning result
+
+             */
+            let result = make_temporary_val(es);
+            let lhs = emit_expr(lhs, es, insts);
+            let false_branch = make_temporary_label(es, "fbranch");
+            let end_branch = make_temporary_label(es, "end");
+            insts.push(Instruction::JumpZero(
+                lhs, Rc::clone(&false_branch)
+            ));
+            let rhs = emit_expr(rhs, es, insts);
+            insts.push(Instruction::JumpZero(
+                rhs, Rc::clone(&false_branch)
+            ));
+
+            insts.push(Instruction::Copy(
+                Val::Constant(1), result.clone(),
+            ));
+
+            insts.push(Instruction::Jump(
+                Rc::clone(&end_branch),
+            ));
+
+            insts.push(Instruction::Label(
+                Rc::clone(&false_branch),
+            ));
+
+            insts.push(Instruction::Copy(
+                Val::Constant(0), result.clone()
+            ));
+
+            insts.push(Instruction::Label(
+                Rc::clone(&end_branch),
+            ));
+
+            result
+        },
+        Expr::Binary(ast::BinaryOp::Or, lhs, rhs) => {
+            /*
+                lhs = <eval lhs>
+                if lhs != 0 jmp true_branch
+                rhs = <eval rhs>
+                if rhs != 0 jmp true_branch
+                result = 0
+                jmp end
+
+            true_branch:
+                result = 1
+
+            end:
+                <end>, returning result
+
+             */
+            let result = make_temporary_val(es);
+            let end = make_temporary_label(es, "end");
+            let true_branch = make_temporary_label(es, "tbranch");
+
+            let lhs = emit_expr(lhs, es, insts);
+            insts.push(Instruction::JumpNotZero(
+                lhs, Rc::clone(&true_branch),
+            ));
+
+            let rhs = emit_expr(rhs, es, insts);
+            insts.push(Instruction::JumpNotZero(
+                rhs, Rc::clone(&true_branch),
+            ));
+
+            insts.push(Instruction::Copy(
+                Val::Constant(0), result.clone(),
+            ));
+
+            insts.push(Instruction::Jump(
+                Rc::clone(&end)
+            ));
+
+            insts.push(Instruction::Label(
+                Rc::clone(&true_branch)
+            ));
+
+            insts.push(Instruction::Copy(
+                Val::Constant(1), result.clone(),
+            ));
+
+            insts.push(Instruction::Label(
+                Rc::clone(&end),
+            ));
+
+            result
+        },
         Expr::Binary(op, lhs, rhs) => {
             let lhs = emit_expr(lhs, es, insts);
             let rhs = emit_expr(rhs, es, insts);
-            let dst = make_temporary(es);
+            let dst = make_temporary_val(es);
             insts.push(Instruction::Binary(
                 convert_binary(op),
                 lhs,
@@ -113,17 +234,25 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
     }
 }
 
-fn make_temporary(es: &mut EmitterState) -> Val {
+fn make_temporary_val(es: &mut EmitterState) -> Val {
     let str = format!("tmp.{}", es.tmp_namen);
     es.tmp_namen += 1;
 
     Val::Var(Rc::new(str))
 }
 
+fn make_temporary_label(es: &mut EmitterState, hint: &str) -> Label {
+    let str = format!("_{}_{}", hint, es.tmp_labeln);
+    es.tmp_labeln += 1;
+
+    Rc::new(str)
+}
+
 fn convert_unary(op: &ast::UnaryOp) -> UnaryOp {
     match op {
         ast::UnaryOp::Complement => UnaryOp::Complement,
         ast::UnaryOp::Negate => UnaryOp::Negate,
+        ast::UnaryOp::Not => UnaryOp::Not,
     }
 }
 
@@ -140,6 +269,13 @@ fn convert_binary(op: &ast::BinaryOp) -> BinaryOp {
         B::BitwiseXor => BinaryOp::BitWiseXor,
         B::LeftShift => BinaryOp::LeftShift,
         B::RightShift => BinaryOp::RightShift,
+        B::LTE => BinaryOp::LessOrEqual,
+        B::LT => BinaryOp::LessThan,
+        B::GTE => BinaryOp::GreaterOrEqual,
+        B::GT => BinaryOp::GreaterThan,
+        B::NEq => BinaryOp::NotEqual,
+        B::Eq => BinaryOp::Equal,
+        B::And | B::Or => panic!("and and or can't be used here"),
     }
 }
 
@@ -147,7 +283,7 @@ impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} (\n", self.function_definition.name)?;
         for inst in &self.function_definition.body {
-            write!(f, "\t{}\n", inst)?;
+            write!(f, "{}\n", inst)?;
         }
         write!(f, ")")?;
         Ok(())
@@ -157,9 +293,14 @@ impl Display for Program {
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::Return(val) => write!(f, "return {}", val),
-            Instruction::Unary(op, src, dst) => write!(f, "{} = {}{}", dst, op, src),
-            Instruction::Binary(op, lhs, rhs, dst) => write!(f, "{} = {} {} {}", dst, lhs, op, rhs),
+            Instruction::Return(val) => write!(f, "\treturn {}", val),
+            Instruction::Unary(op, src, dst) => write!(f, "\t{} = {}{}", dst, op, src),
+            Instruction::Binary(op, lhs, rhs, dst) => write!(f, "\t{} = {} {} {}", dst, lhs, op, rhs),
+            Instruction::Copy(src, dst) => write!(f, "\t{} = {}", dst, src),
+            Instruction::Jump(target) => write!(f, "\tjmp {}", target),
+            Instruction::JumpZero(condition, target) => write!(f, "\tif {} = 0 jmp {}", condition, target),
+            Instruction::JumpNotZero(condition, target) => write!(f, "\tif {} != 0 jmp {}", condition, target),
+            Instruction::Label(ident) => write!(f, "{}:", ident),
         }
     }
 }
@@ -178,6 +319,7 @@ impl Display for UnaryOp {
         match self {
             UnaryOp::Complement => write!(f, "~"),
             UnaryOp::Negate => write!(f, "-"),
+            UnaryOp::Not => write!(f, "!"),
         }
     }
 }
@@ -195,6 +337,12 @@ impl Display for BinaryOp {
             BinaryOp::BitWiseXor => write!(f, "^"),
             BinaryOp::LeftShift => write!(f, "<<"),
             BinaryOp::RightShift => write!(f, ">>"),
+            BinaryOp::Equal => write!(f, "=="),
+            BinaryOp::NotEqual => write!(f, "!="),
+            BinaryOp::LessThan => write!(f, "<"),
+            BinaryOp::LessOrEqual => write!(f, "<="),
+            BinaryOp::GreaterThan => write!(f, ">"),
+            BinaryOp::GreaterOrEqual => write!(f, ">="),
         }
     }
 }

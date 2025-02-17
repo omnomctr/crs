@@ -20,6 +20,11 @@ pub enum Instruction {
     Unary(UnaryOp, Operand),
     Binary(BinaryOp, Operand, Operand), /* op, rhs, dst */
     Idiv(Operand),
+    Cmp(Operand, Operand), /* lhs, rhs */
+    Jmp(Label),
+    JmpCond(Condition, Label),
+    SetCond(Condition, Operand),
+    Label(Label),
     Cdq,
     AllocateStack(usize),
     Ret,
@@ -34,6 +39,7 @@ pub enum Operand {
 }
 
 type Identifier = Rc<String>;
+type Label = Rc<String>;
 
 #[derive(Debug)]
 pub enum UnaryOp {
@@ -41,7 +47,12 @@ pub enum UnaryOp {
     Not,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
+pub enum Condition {
+    Eq, NEq, GT, GTE, LT, LTE
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BinaryOp {
     Add, Sub, Mult, And, Or, Xor, LShift, RShift,
 }
@@ -53,7 +64,6 @@ pub enum Register {
     R11,
     DX,
     CX,
-    CL,
 }
 
 pub fn to_assembly_program(prog: ir::Program) -> Program {
@@ -72,95 +82,243 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     ));
                     instructions.push(Instruction::Ret);
                 },
-                I::Unary(op, src, dst) => {
+                I::Unary(ir::UnaryOp::Not, src, dst) => {
+                    instructions.push(Instruction::Cmp(
+                        Operand::Imm(0),
+                        convert_val(src),
+                    ));
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::Eq,
+                        convert_val(dst),
+                    ));
+                },
+                I::Unary(ir::UnaryOp::Negate, src, dst) => {
                     instructions.push(Instruction::Mov(
                         convert_val(src),
                         convert_val(dst)
                     ));
                     instructions.push(Instruction::Unary(
-                        convert_unary_op(op),
+                        UnaryOp::Neg,
                         convert_val(dst),
                     ))
-                }
+                },
+                I::Unary(ir::UnaryOp::Complement, src, dst) => {
+                    instructions.push(Instruction::Mov(
+                        convert_val(src),
+                        convert_val(dst)
+                    ));
+                    instructions.push(Instruction::Unary(
+                        UnaryOp::Not,
+                        convert_val(dst),
+                    ))
+                },
+                I::Binary(ir::BinaryOp::Divide, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        convert_val(lhs),
+                        Operand::Reg(Register::AX)
+                    ));
+                    instructions.push(Instruction::Cdq);
+                    instructions.push(Instruction::Idiv(
+                        convert_val(rhs)
+                    ));
+                    instructions.push(Instruction::Mov(
+                        Operand::Reg(Register::AX),
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::Remainder, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        convert_val(lhs),
+                        Operand::Reg(Register::AX)
+                    ));
+                    instructions.push(Instruction::Cdq);
+                    instructions.push(Instruction::Idiv(
+                        convert_val(rhs)
+                    ));
+                    instructions.push(Instruction::Mov(
+                        Operand::Reg(Register::DX),
+                        convert_val(dst)
+                    ));
+                },
+                I::Binary(op @ ir::BinaryOp::BitWiseOr
+                        | op @ ir::BinaryOp::BitwiseAnd
+                        | op @ ir::BinaryOp::BitWiseXor, lhs, rhs, dst) => {
+                    // dest <- dest & src
+                    instructions.push(Instruction::Mov(
+                        convert_val(rhs),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::Binary(
+                        match op {
+                            ir::BinaryOp::BitWiseOr => BinaryOp::Or,
+                            ir::BinaryOp::BitwiseAnd => BinaryOp::And,
+                            ir::BinaryOp::BitWiseXor => BinaryOp::Xor,
+                            _ => panic!(),
+                        },
+                        convert_val(lhs),
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(op @ ir::BinaryOp::LeftShift
+                        | op @ ir::BinaryOp::RightShift, lhs, rhs, dst) => {
+                    // dest <- dest << / >> rhs
+                    instructions.push(Instruction::Mov(
+                        convert_val(lhs),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::Binary(
+                        match op {
+                            ir::BinaryOp::LeftShift => BinaryOp::LShift,
+                            ir::BinaryOp::RightShift => BinaryOp::RShift,
+                            _ => panic!()
+                        },
+                        convert_val(rhs),
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::Equal, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::Cmp(
+                        convert_val(lhs),
+                        convert_val(rhs),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::Eq,
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::NotEqual, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst),
+                    ));
+                    instructions.push(Instruction::Cmp(
+                        convert_val(lhs),
+                        convert_val(rhs),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::NEq,
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::LessThan, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst)
+                    ));
+                    instructions.push(Instruction::Cmp(
+                        convert_val(rhs),
+                        convert_val(lhs),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::LT,
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::GreaterThan, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst)
+                    ));
+                    instructions.push(Instruction::Cmp(
+                        convert_val(rhs),
+                        convert_val(lhs),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::GT,
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::LessOrEqual, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst)
+                    ));
+                    instructions.push(Instruction::Cmp(
+                        convert_val(rhs),
+                        convert_val(lhs),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::LTE,
+                        convert_val(dst),
+                    ));
+                },
+                I::Binary(ir::BinaryOp::GreaterOrEqual, lhs, rhs, dst) => {
+                    instructions.push(Instruction::Mov(
+                        Operand::Imm(0),
+                        convert_val(dst)
+                    ));
+                    instructions.push(Instruction::Cmp(
+                        convert_val(rhs),
+                        convert_val(lhs),
+                    ));
+                    instructions.push(Instruction::SetCond(
+                        Condition::GTE,
+                        convert_val(dst),
+                    ));
+                },
                 I::Binary(op, lhs, rhs, dst) => {
-                    if let ir::BinaryOp::Divide = op {
-                        instructions.push(Instruction::Mov(
-                            convert_val(lhs),
-                            Operand::Reg(Register::AX)
-                        ));
-                        instructions.push(Instruction::Cdq);
-                        instructions.push(Instruction::Idiv(
-                            convert_val(rhs)
-                        ));
-                        instructions.push(Instruction::Mov(
-                            Operand::Reg(Register::AX),
-                            convert_val(dst),
-                        ));
-                    } else if let ir::BinaryOp::Remainder = op {
-                        instructions.push(Instruction::Mov(
-                            convert_val(lhs),
-                            Operand::Reg(Register::AX)
-                        ));
-                        instructions.push(Instruction::Cdq);
-                        instructions.push(Instruction::Idiv(
-                            convert_val(rhs)
-                        ));
-                        instructions.push(Instruction::Mov(
-                            Operand::Reg(Register::DX),
-                            convert_val(dst)
-                        ));
-                    } else if let ir::BinaryOp::BitwiseAnd | ir::BinaryOp::BitWiseOr | ir::BinaryOp::BitWiseXor = op {
-                        // dest <- dest & src
-                        instructions.push(Instruction::Mov(
-                            convert_val(rhs),
-                            convert_val(dst),
-                        ));
-                        instructions.push(Instruction::Binary(
-                            match op {
-                                ir::BinaryOp::BitWiseOr => BinaryOp::Or,
-                                ir::BinaryOp::BitwiseAnd => BinaryOp::And,
-                                ir::BinaryOp::BitWiseXor => BinaryOp::Xor,
-                                _ => panic!(),
-                            },
-                            convert_val(lhs),
-                            convert_val(dst),
-                        ));
-                    } else if let ir::BinaryOp::LeftShift | ir::BinaryOp::RightShift = op {
-                        // dest <- dest << / >> rhs
-                        instructions.push(Instruction::Mov(
-                            convert_val(lhs),
-                            convert_val(dst),
-                        ));
-                        instructions.push(Instruction::Binary(
-                            match op {
-                                ir::BinaryOp::LeftShift => BinaryOp::LShift,
-                                ir::BinaryOp::RightShift => BinaryOp::RShift,
-                                _ => panic!()
-                            },
-                            convert_val(rhs),
-                            convert_val(dst),
-                        ));
-                    } else {
-                        // dest <- dest + src;
-                        instructions.push(Instruction::Mov(
-                            convert_val(lhs),
-                            convert_val(dst),
-                        ));
-                        use ir::BinaryOp as B;
-                        let op_ = match op {
-                            B::Add => BinaryOp::Add,
-                            B::Subtract => BinaryOp::Sub,
-                            B::Multiply => BinaryOp::Mult,
-                            B::Divide | B::Remainder | B::BitwiseAnd | B::BitWiseOr
-                            | B::BitWiseXor | B::RightShift | B::LeftShift => panic!()
-                        };
-                        instructions.push(Instruction::Binary(
-                            op_,
-                            convert_val(rhs),
-                            convert_val(dst),
-                        ));
-                    }
-                }
+                    // dest <- dest + src;
+                    instructions.push(Instruction::Mov(
+                        convert_val(lhs),
+                        convert_val(dst),
+                    ));
+                    use ir::BinaryOp as B;
+                    let op_ = match op {
+                        B::Add => BinaryOp::Add,
+                        B::Subtract => BinaryOp::Sub,
+                        B::Multiply => BinaryOp::Mult,
+                        B::Divide | B::Remainder | B::BitwiseAnd | B::BitWiseOr
+                        | B::BitWiseXor | B::RightShift | B::LeftShift => panic!(),
+                        B::Equal | B::NotEqual |
+                        B::LessThan | B::LessOrEqual |
+                        B::GreaterThan | B::GreaterOrEqual => panic!(),
+                    };
+                    instructions.push(Instruction::Binary(
+                        op_,
+                        convert_val(rhs),
+                        convert_val(dst),
+                    ));
+                },
+                I::Jump(target) => {
+                    instructions.push(Instruction::Jmp(Rc::clone(&target)));
+                },
+                I::Label(lbl) => {
+                    instructions.push(Instruction::Label(Rc::clone(&lbl)));
+                },
+                I::JumpZero(cond, target) => {
+                    instructions.push(Instruction::Cmp(
+                        Operand::Imm(0),
+                        convert_val(cond),
+                    ));
+                    instructions.push(Instruction::JmpCond(
+                       Condition::Eq,
+                       Rc::clone(&target)
+                    ));
+                },
+                I::JumpNotZero(cond, target) => {
+                    instructions.push(Instruction::Cmp(
+                        Operand::Imm(0),
+                        convert_val(cond),
+                    ));
+                    instructions.push(Instruction::JmpCond(
+                        Condition::NEq,
+                        Rc::clone(&target)
+                    ));
+                },
+                I::Copy(src, dst) => {
+                    instructions.push(Instruction::Mov(
+                        convert_val(src),
+                        convert_val(dst),
+                    ));
+                },
             }
         }
     }
@@ -190,12 +348,22 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     convert_pseudoregister(v, &mut pr_map, &mut stack_offset);
                 }
                 Instruction::Cdq => {}
+                Instruction::Cmp(lhs, rhs) => {
+                    convert_pseudoregister(lhs, &mut pr_map, &mut stack_offset);
+                    convert_pseudoregister(rhs, &mut pr_map, &mut stack_offset);
+                }
+                Instruction::Jmp(_) => {}
+                Instruction::JmpCond(_, _) => {}
+                Instruction::SetCond(_, val) => {
+                    convert_pseudoregister(val, &mut pr_map, &mut stack_offset);
+                }
+                Instruction::Label(_) => {}
             }
         }
     }
     // third pass - add AllocateStack instruction, fix various x86 instruction restraints
     let instructions = {
-        let mut instructions_ = Vec::with_capacity(instructions.len() + 1);
+        let mut instructions_ = Vec::with_capacity(instructions.capacity() + 1);
         instructions_.push(Instruction::AllocateStack(stack_offset));
 
         for inst in instructions {
@@ -261,7 +429,7 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     ));
                     instructions_.push(Instruction::Binary(
                         op,
-                        Operand::Reg(Register::CL),
+                        Operand::Reg(Register::CX),
                         dst,
                     ));
                 },
@@ -278,6 +446,27 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     instructions_.push(Instruction::Mov(
                         Operand::Reg(Register::R11),
                         Operand::Stack(rhs),
+                    ));
+                },
+                Instruction::Cmp(lhs @ Operand::Stack(_), rhs @ Operand::Stack(_)) => {
+                    /* only one operand can be on the stack */
+                    instructions_.push(Instruction::Mov(
+                        lhs,
+                        Operand::Reg(Register::R10),
+                    ));
+                    instructions_.push(Instruction::Cmp(
+                        Operand::Reg(Register::R10),
+                        rhs
+                    ));
+                },
+                Instruction::Cmp(lhs, rhs @ Operand::Imm(_)) => {
+                    instructions_.push(Instruction::Mov(
+                        rhs,
+                        Operand::Reg(Register::R11),
+                    ));
+                    instructions_.push(Instruction::Cmp(
+                        lhs,
+                        Operand::Reg(Register::R11),
                     ));
                 },
                 _ => instructions_.push(inst),
@@ -302,13 +491,6 @@ fn convert_val(val: &ir::Val) -> Operand {
     }
 }
 
-fn convert_unary_op(op: &ir::UnaryOp) -> UnaryOp {
-    match op {
-        ir::UnaryOp::Complement => UnaryOp::Not,
-        ir::UnaryOp::Negate => UnaryOp::Neg,
-    }
-}
-
 fn convert_pseudoregister(op: &mut Operand, pr_map: &mut HashMap<Rc<String>, usize>, stack_offset: &mut usize) {
     if let Operand::Pseudo(s) = op {
         *op = Operand::Stack(*pr_map
@@ -319,3 +501,4 @@ fn convert_pseudoregister(op: &mut Operand, pr_map: &mut HashMap<Rc<String>, usi
                                 }));
     }
 }
+
