@@ -4,6 +4,7 @@ use std::io::BufWriter;
 use crate::assembly;
 use crate::assembly::{BinaryOp, Condition, Instruction, Operand, Register, UnaryOp};
 use std::io::Write;
+use crate::emit::WordSize::{DWORD, WORD};
 
 pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
     let mut writer = BufWriter::new(f);
@@ -28,9 +29,9 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
     match inst {
         Instruction::Mov(src, dest) => {
             write!(writer, "movl   ")?;
-            emit_operand(writer, src, 4)?;
+            emit_operand(writer, src, DWORD)?;
             write!(writer, ", ")?;
-            emit_operand(writer, dest, 4)?;
+            emit_operand(writer, dest, DWORD)?;
         },
         Instruction::Ret => {
             write!(writer, "movq   %rbp, %rsp\n\t")?;
@@ -42,7 +43,7 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
                 UnaryOp::Not => "notl",
                 UnaryOp::Neg => "negl",
             })?;
-            emit_operand(writer, operand, 4)?;
+            emit_operand(writer, operand, DWORD)?;
         },
         Instruction::AllocateStack(i) => {
             write!(writer, "subq   ${}, %rsp", i)?;
@@ -50,14 +51,14 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
         Instruction::SetCond(cond, op) => {
             write!(writer, "set{}   ",
                 cond)?;
-            emit_operand(writer, op, 1)?;
+            emit_operand(writer, op, WORD)?;
         },
         Instruction::Binary(op, rhs, dst) => {
             if op == BinaryOp::LShift || op == BinaryOp::RShift {
                 write!(writer, "shll ")?;
-                emit_operand(writer, rhs, 1)?;
+                emit_operand(writer, rhs, WORD)?;
                 write!(writer, ", ")?;
-                emit_operand(writer, dst, 4)?;
+                emit_operand(writer, dst, DWORD)?;
             } else {
                 write!(writer, "{}   ", match op {
                     BinaryOp::Add => "addl",
@@ -68,24 +69,24 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
                     BinaryOp::Xor => "xorl",
                     BinaryOp::LShift | BinaryOp::RShift => panic!(),
                 })?;
-                emit_operand(writer, rhs, 4)?;
+                emit_operand(writer, rhs, DWORD)?;
                 write!(writer, ", ")?;
-                emit_operand(writer, dst, 4)?;
+                emit_operand(writer, dst, DWORD)?;
             }
 
         },
         Instruction::Idiv(op) => {
             write!(writer, "idivl   ")?;
-            emit_operand(writer, op, 4)?;
+            emit_operand(writer, op, DWORD)?;
         },
         Instruction::Cdq => {
             write!(writer, "cdq")?;
         }
         Instruction::Cmp(op1, op2) => {
             write!(writer, "cmpl   ")?;
-            emit_operand(writer, op1, 4)?;
+            emit_operand(writer, op1, DWORD)?;
             write!(writer, ", ")?;
-            emit_operand(writer, op2, 4)?;
+            emit_operand(writer, op2, DWORD)?;
         }
         Instruction::Jmp(lbl) => {
             write!(writer, "jmp    .L{}", lbl)?;
@@ -101,10 +102,10 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
     Ok(())
 }
 
-fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand, bytes: u8) -> std::io::Result<()> {
+fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand, word_size: WordSize) -> std::io::Result<()> {
     match op {
         Operand::Imm(i) => write!(writer, "${}", i)?,
-        Operand::Reg(r) => emit_register(writer, r, bytes)?,
+        Operand::Reg(r) => emit_register(writer, r, word_size)?,
         Operand::Stack(i) => write!(writer, "-{}(%rbp)", i)?,
         Operand::Pseudo(_) => panic!(),
     }
@@ -112,26 +113,29 @@ fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand, bytes: u8) 
     Ok(())
 }
 
-
-fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register, bytes: u8) -> std::io::Result<()> {
-    if bytes == 4 { /* DWORD */
-        match reg {
-            Register::AX => write!(writer, "%eax"),
-            Register::R10 => write!(writer, "%r10d"),
-            Register::R11 => write!(writer, "%r11d"),
-            Register::DX => write!(writer, "%edx"),
-            Register::CX => write!(writer, "%ecx"),
+enum WordSize {
+    DWORD, WORD,
+}
+fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register, word_size: WordSize) -> std::io::Result<()> {
+    match word_size {
+        WordSize::DWORD => {
+            match reg {
+                Register::AX => write!(writer, "%eax"),
+                Register::R10 => write!(writer, "%r10d"),
+                Register::R11 => write!(writer, "%r11d"),
+                Register::DX => write!(writer, "%edx"),
+                Register::CX => write!(writer, "%ecx"),
+            }
+        },
+        WordSize::WORD => {
+            match reg {
+                Register::AX => write!(writer, "%al"),
+                Register::R10 => write!(writer, "%r10b"),
+                Register::R11 => write!(writer, "%r11b"),
+                Register::DX => write!(writer, "%dl"),
+                Register::CX => write!(writer, "%cl"),
+            }
         }
-    } else if bytes == 1 { /* WORD */
-        match reg {
-            Register::AX => write!(writer, "%al"),
-            Register::R10 => write!(writer, "%r10b"),
-            Register::R11 => write!(writer, "%r11b"),
-            Register::DX => write!(writer, "%dl"),
-            Register::CX => write!(writer, "%cl"),
-        }
-    } else {
-        panic!("unsupported number of bytes specified")
     }
 }
 
