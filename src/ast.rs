@@ -25,6 +25,8 @@ pub enum Statement {
     Expression(Expr),
     If(IfStatement),
     Empty, /* eg while(1) ; <- in between the paren and semicolon */
+    LabeledStatement(Identifier, Box<Statement>), /* label: stmts for goto */
+    JmpStatement(Identifier),
 }
 
 #[derive(Debug)]

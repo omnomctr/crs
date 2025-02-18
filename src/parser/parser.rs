@@ -123,7 +123,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> Result<ast::Statement, ParserError> {
-        match self.current_token.kind {
+        let current_token = self.current_token.kind.clone();
+        let peek = self.peek_token();
+
+        match current_token {
             TokenType::RetKeyword => {
                 self.eat(TokenType::RetKeyword)?;
                 let expr = self.parse_expr()?;
@@ -131,6 +134,27 @@ impl<'a> Parser<'a> {
                 Ok(ast::Statement::Return(expr))
             },
             TokenType::Semicolon => Ok(ast::Statement::Empty),
+            TokenType::Identifier(x) if peek == Some(TokenType::Colon) => {
+                self.advance_token()?;
+                self.eat(TokenType::Colon)?;
+                let rhs = self.parse_statement()?;
+                Ok(ast::Statement::LabeledStatement(Rc::clone(&x), Box::new(rhs)))
+            },
+            TokenType::Goto => {
+                self.eat(TokenType::Goto)?;
+                let label = if let TokenType::Identifier(lbl) = &self.current_token.kind {
+                    Rc::clone(&lbl)
+                } else {
+                    return Err(ParserError::new(self.current_token.line_num, ParserErrorKind::UnexpectedToken(UnexpectedToken {
+                        expected: TokenType::Identifier(Rc::new("label".into())),
+                        found: self.current_token.kind.clone(),
+                    }), self.filename));
+                };
+                self.advance_token()?;
+                self.eat(TokenType::Semicolon)?;
+
+                Ok(ast::Statement::JmpStatement(label))
+            }
             TokenType::If => {
                 self.eat(TokenType::If)?;
                 self.eat(TokenType::LParen)?;
@@ -493,14 +517,12 @@ impl<'a> Parser<'a> {
         Ok(ret)
     }
 
-    /*
     fn peek_token(&mut self) -> Option<TokenType> {
         self.lex.peek()
             .map(|x| x.as_ref().ok())
             .flatten()
             .map(|x| x.kind.clone())
     }
-    */
 
     fn advance_token(&mut self) -> Result<(), ParserError> {
         assert_ne!(self.current_token.kind, TokenType::Eof);

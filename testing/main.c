@@ -8,11 +8,18 @@ int main(void)
     int b = 32590;
     b++;
     --b;
+
     if (b > 10) {
         b ^= b;
     } else {
         return a;
     }
 
-    return (a == b) ? 5 : 0;
+    int x = 0;
+label:
+    x++;
+    if (x < 100)
+        goto label;
+
+    return (a == b) ? 5 : x;
 }

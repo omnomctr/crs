@@ -77,12 +77,13 @@ fn main() {
         },
         CompilationStage::Validate => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
+
             println!("{:#?}", analyse(ast).unwrap());
         }
         CompilationStage::Tacky => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
-            let ast_ = analyse(ast).unwrap();
-            let ir = emit_ir(ast_);
+            let ast = analyse(ast).unwrap();
+            let ir = emit_ir(ast);
             println!("{}", ir);
         },
         CompilationStage::Unspecified => {

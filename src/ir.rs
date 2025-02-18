@@ -157,6 +157,13 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
 
             insts.push(Instruction::Label(if_end_lbl));
         },
+        Statement::LabeledStatement(lbl, rhs) => {
+            insts.push(Instruction::Label(Rc::clone(&lbl)));
+            emit_statement(*rhs, es, insts);
+        }
+        Statement::JmpStatement(lbl) => {
+            insts.push(Instruction::Jump(Rc::clone(&lbl)));
+        }
     }
 }
 

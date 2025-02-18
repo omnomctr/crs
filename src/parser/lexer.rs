@@ -54,6 +54,7 @@ pub enum TokenType {
     Else,
     QuestionMark,
     Colon,
+    Goto,
 }
 
 #[derive(Debug)]
@@ -208,6 +209,7 @@ impl<'a> Lexer<'a> {
             "return" => Tok::RetKeyword,
             "if" => Tok::If,
             "else" => Tok::Else,
+            "goto" => Tok::Goto,
             _ => Tok::Identifier(Rc::new(ident.into())),
         };
 
