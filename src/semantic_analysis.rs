@@ -171,6 +171,13 @@ impl AnalysisState {
                     })
                 }
             },
+            Expr::Ternary(cond, then, otherwise) => {
+                Expr::Ternary(
+                    Box::new(self.resolve_expr(*cond)?),
+                    Box::new(self.resolve_expr(*then)?),
+                    Box::new(self.resolve_expr(*otherwise)?)
+                )
+            },
         })
     }
 }

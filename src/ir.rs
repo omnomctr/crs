@@ -385,6 +385,55 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             result
         }
+        Expr::Ternary(cond, then, otherwise) => {
+            /*
+                cond = <eval cond>
+                jmp if cond == 0 .Lelsebrnch
+
+            .Lthenbrnch
+                 tmp.0 = <eval then>
+                 jmp .Lend
+            .Lelsebrnch
+                tmp.0  = <eval otherwise>
+            .Lend
+                <return tmp.0>
+             */
+            let result = make_temporary_val(es);
+            let then_branch = make_temporary_label(es, "ternarythenbrnch");
+            let else_branch = make_temporary_label(es, "ternaryelsebrnch");
+            let end = make_temporary_label(es, "ternaryend");
+
+            let cond = emit_expr(cond.as_ref(), es, insts);
+            insts.push(Instruction::JumpZero(
+                cond,
+                else_branch.clone()
+            ));
+
+            insts.push(Instruction::Label(
+                then_branch
+            ));
+            let then = emit_expr(then.as_ref(), es, insts);
+            insts.push(Instruction::Copy(
+                then,
+                result.clone()
+            ));
+            insts.push(Instruction::Jump(end.clone()));
+
+            insts.push(Instruction::Label(
+               else_branch.clone()
+            ));
+            let otherwise = emit_expr(otherwise.as_ref(), es, insts);
+            insts.push(Instruction::Copy(
+                otherwise,
+                result.clone()
+            ));
+
+            insts.push(Instruction::Label(
+                end
+            ));
+
+            result
+        }
     }
 }
 

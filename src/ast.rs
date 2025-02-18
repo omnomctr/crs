@@ -50,6 +50,7 @@ pub enum Expr {
     CompoundAssignment(BinaryOp, Box<Expr>, Box<Expr>), /* op, lvalue, rvalue */
     PrefixInc(Incrementation, Box<Expr>), /* ++x / --x */
     PostfixInc(Incrementation, Box<Expr>), /* x++ / x-- */
+    Ternary(Box<Expr>, Box<Expr>, Box<Expr>), /* condition ? then : else */
 }
 
 pub type Identifier = Rc<String>;

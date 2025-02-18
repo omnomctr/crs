@@ -132,7 +132,6 @@ impl<'a> Parser<'a> {
             },
             TokenType::Semicolon => Ok(ast::Statement::Empty),
             TokenType::If => {
-                // TODO: add ternary operator and optional brackets for single statements
                 self.eat(TokenType::If)?;
                 self.eat(TokenType::LParen)?;
                 let condition = self.parse_expr()?;
@@ -422,7 +421,8 @@ impl<'a> Parser<'a> {
             || self.current_token.kind == TokenType::RightShiftEqual
             || self.current_token.kind == TokenType::BitwiseOrEqual
             || self.current_token.kind == TokenType::BitwiseAndEqual
-            || self.current_token.kind == TokenType::BitwiseXOrEqual {
+            || self.current_token.kind == TokenType::BitwiseXOrEqual
+            || self.current_token.kind == TokenType::QuestionMark {
             match self.current_token.kind {
                 TokenType::Assignment => {
                     self.eat(TokenType::Assignment)?;
@@ -479,9 +479,15 @@ impl<'a> Parser<'a> {
                     let rhs = self.expr1()?;
                     ret = Expr::CompoundAssignment(BinaryOp::BitwiseXor, Box::new(ret), Box::new(rhs));
                 },
+                TokenType::QuestionMark => {
+                    self.eat(TokenType::QuestionMark)?;
+                    let then = self.expr1()?;
+                    self.eat(TokenType::Colon)?;
+                    let otherwise = self.expr1()?;
+                    ret = Expr::Ternary(Box::new(ret), Box::new(then), Box::new(otherwise))
+                },
                 _ => unreachable!(),
             }
-
         }
 
         Ok(ret)

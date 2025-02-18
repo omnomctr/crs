@@ -52,6 +52,8 @@ pub enum TokenType {
     BitwiseXOrEqual,
     If,
     Else,
+    QuestionMark,
+    Colon,
 }
 
 #[derive(Debug)]
@@ -161,6 +163,8 @@ impl<'a> Lexer<'a> {
             '<' => Tok::LT,
             '>' if peek == Some('=') => { self.read_char()?; Tok::GTE },
             '>' => Tok::GT,
+            '?' => Tok::QuestionMark,
+            ':' => Tok::Colon,
             x => {
                 if self.ch.is_digit(10) {
                     return self.read_constant();

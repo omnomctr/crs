@@ -8,8 +8,11 @@ int main(void)
     int b = 32590;
     b++;
     --b;
-    if (b > 10)
+    if (b > 10) {
         b ^= b;
+    } else {
+        return a;
+    }
 
-    return 0;
+    return (a == b) ? 5 : 0;
 }
