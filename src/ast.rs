@@ -8,8 +8,10 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     pub name: Identifier,
-    pub body: Vec<BlockItem>
+    pub body: Block
 }
+
+pub(crate) type Block = Vec<BlockItem>;
 
 #[derive(Debug)]
 pub enum BlockItem {
@@ -21,7 +23,15 @@ pub enum BlockItem {
 pub enum Statement {
     Return(Expr),
     Expression(Expr),
+    If(IfStatement),
     Empty, /* eg while(1) ; <- in between the paren and semicolon */
+}
+
+#[derive(Debug)]
+pub struct IfStatement {
+    pub condition: Expr,
+    pub then: Block,
+    pub otherwise: Option<Block>,
 }
 
 #[derive(Debug)]

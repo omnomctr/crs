@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, Expr, Incrementation, Statement};
+use crate::ast::{BlockItem, Expr, IfStatement, Incrementation, Statement};
 
 
 #[derive(Debug)]
@@ -76,19 +76,7 @@ pub fn emit_ir(prog: ast::Program) -> Program {
     };
 
     let mut insts = Vec::new();
-    for item in prog.f.body {
-        match item {
-            BlockItem::S(stmt) => emit_statement(stmt, &mut state, &mut insts),
-            BlockItem::D(ast::Declaration { name, initializer: Some(e) }) => {
-                let result = emit_expr(&e, &mut state, &mut insts);
-                insts.push(Instruction::Copy(
-                    result,
-                    Val::Var(Rc::clone(&name))
-                ));
-            },
-            _ => (),
-        }
-    }
+    emit_block(prog.f.body, &mut state, &mut insts);
 
     // if it's the main function and it doesn't have a return
     // the standard tells us we need to add it automatically
@@ -108,16 +96,67 @@ pub fn emit_ir(prog: ast::Program) -> Program {
     }
 }
 
+fn emit_block(block: ast::Block, state: &mut EmitterState, insts: &mut Vec<Instruction>) {
+    for item in block {
+        match item {
+            BlockItem::S(stmt) => emit_statement(stmt, state, insts),
+            BlockItem::D(ast::Declaration { name, initializer: Some(e) }) => {
+                let result = emit_expr(&e, state, insts);
+                insts.push(Instruction::Copy(
+                    result,
+                    Val::Var(Rc::clone(&name))
+                ));
+            },
+            BlockItem::D(ast::Declaration { name: _, initializer: None }) => ()
+        }
+    }
+
+}
+
 fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<Instruction>) {
     match stmt {
         Statement::Return(expr) => {
             let val = emit_expr(&expr, es, insts);
             insts.push(Instruction::Return(val));
-        }
+        },
         Statement::Expression(expr) => {
             let _ = emit_expr(&expr, es, insts); /* ignore the result */
-        }
+        },
         Statement::Empty => (),
+        Statement::If(IfStatement{ condition, then, otherwise }) => {
+            /*
+                tmp.0 = <eval condition>
+                jmp if tmp.0 == 0 jmp .Lelse
+
+                <then block>
+                jmp .Lifend
+             .Lelse:
+                <othewise block>
+
+             .Lifend:
+                <return>
+             */
+            let condition = emit_expr(&condition, es, insts);
+            let else_lbl = make_temporary_label(es, "elsebrnch");
+            let if_end_lbl = make_temporary_label(es, "ifend");
+
+            insts.push(Instruction::JumpZero(
+               condition,
+               else_lbl.clone(),
+            ));
+
+            insts.push(Instruction::Label(make_temporary_label(es, "thenbrnch")));
+            emit_block(then, es, insts);
+
+            insts.push(Instruction::Jump(if_end_lbl.clone()));
+            insts.push(Instruction::Label(else_lbl.clone()));
+
+            if let Some(block) = otherwise {
+                emit_block(block, es, insts);
+            }
+
+            insts.push(Instruction::Label(if_end_lbl));
+        },
     }
 }
 

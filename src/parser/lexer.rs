@@ -50,6 +50,8 @@ pub enum TokenType {
     BitwiseAndEqual,
     BitwiseOrEqual,
     BitwiseXOrEqual,
+    If,
+    Else,
 }
 
 #[derive(Debug)]
@@ -200,6 +202,8 @@ impl<'a> Lexer<'a> {
             "int" => Tok::IntKeyword,
             "void" => Tok::VoidKeyword,
             "return" => Tok::RetKeyword,
+            "if" => Tok::If,
+            "else" => Tok::Else,
             _ => Tok::Identifier(Rc::new(ident.into())),
         };
 

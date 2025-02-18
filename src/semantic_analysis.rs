@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::ast;
+use crate::ast::IfStatement;
 
 struct AnalysisState {
     variable_map: HashMap<ast::Identifier, ast::Identifier>,
@@ -28,26 +29,32 @@ pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
         variable_map: HashMap::new(),
         temp_var_increment: 0,
     };
-    let mut body = Vec::with_capacity(ast.f.body.len());
-    for block_item in ast.f.body {
-        use ast::BlockItem as BlockItem;
-        body.push(
-            match block_item {
-                BlockItem::S(s) => BlockItem::S(state.resolve_statement(s)?),
-                BlockItem::D(d) => BlockItem::D(state.resolve_declaration(d)?),
-            }
-        )
-    }
 
     Ok(ast::Program {
         f: ast::Function {
             name: ast.f.name,
-            body,
+            body: state.resolve_block(ast.f.body)?,
         }
     })
 }
 
+
+
 impl AnalysisState {
+    fn resolve_block(&mut self, block: ast::Block) -> AnalysisResult<ast::Block> {
+        let mut body = Vec::with_capacity(block.len());
+        for block_item in block {
+            use ast::BlockItem as BlockItem;
+            body.push(
+                match block_item {
+                    BlockItem::S(s) => BlockItem::S(self.resolve_statement(s)?),
+                    BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d)?),
+                }
+            )
+        }
+
+        Ok(body)
+    }
     fn resolve_declaration(&mut self, decl: ast::Declaration) -> AnalysisResult<ast::Declaration> {
         if self.variable_map.contains_key(&decl.name) {
             return Err(SemanticAnalysisError {
@@ -76,6 +83,15 @@ impl AnalysisState {
             Statement::Return(e) => Statement::Return(self.resolve_expr(e)?),
             Statement::Expression(e) => Statement::Expression(self.resolve_expr(e)?),
             Statement::Empty => Statement::Empty,
+            Statement::If(IfStatement { condition, then, otherwise }) => {
+                Statement::If(
+                    IfStatement{
+                        condition: self.resolve_expr(condition)?,
+                        then: self.resolve_block(then)?,
+                        otherwise: otherwise.map(|x| self.resolve_block(x)).transpose()?
+                    }
+                )
+            }
         })
     }
 

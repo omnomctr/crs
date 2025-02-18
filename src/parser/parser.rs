@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use super::{Lexer, ParserError, ParserErrorKind, Token, TokenType, UnexpectedToken};
 use crate::ast;
-use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, Incrementation, UnaryOp};
+use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, IfStatement, Incrementation, Statement, UnaryOp};
 
 pub struct Parser<'a> {
     lex: Peekable<&'a mut Lexer<'a>>,
@@ -131,6 +131,48 @@ impl<'a> Parser<'a> {
                 Ok(ast::Statement::Return(expr))
             },
             TokenType::Semicolon => Ok(ast::Statement::Empty),
+            TokenType::If => {
+                // TODO: add ternary operator and optional brackets for single statements
+                self.eat(TokenType::If)?;
+                self.eat(TokenType::LParen)?;
+                let condition = self.parse_expr()?;
+                self.eat(TokenType::RParen)?;
+
+                let mut then = Vec::new();
+                if self.current_token.kind == TokenType::LSquirly {
+                    self.eat(TokenType::LSquirly)?;
+                    while self.current_token.kind != TokenType::RSquirly {
+                        then.push(self.parse_block_item()?);
+                    }
+                    self.eat(TokenType::RSquirly)?;
+                } else {
+                    then.push(self.parse_block_item()?);
+                }
+
+                let otherwise = if self.current_token.kind == TokenType::Else {
+                    self.eat(TokenType::Else)?;
+                    let mut else_block = Vec::new();
+                    if self.current_token.kind == TokenType::LSquirly {
+                        self.eat(TokenType::LSquirly)?;
+                        while self.current_token.kind != TokenType::RSquirly {
+                            else_block.push(self.parse_block_item()?);
+                        }
+                        self.eat(TokenType::RSquirly)?;
+                    } else {
+                        else_block.push(self.parse_block_item()?);
+                    }
+                    Some(else_block)
+                } else {
+                    None
+                };
+
+                let stmt = Statement::If(IfStatement {
+                    condition,
+                    then,
+                    otherwise,
+                });
+                Ok(stmt)
+            },
             _ => {
                 let expr = self.parse_expr()?;
                 self.eat(TokenType::Semicolon)?;

@@ -6,6 +6,10 @@ int main(void)
     a >>= 1;
     a >>= 1;
     int b = 32590;
-    b ^= b;
-    return b;
+    b++;
+    --b;
+    if (b > 10)
+        b ^= b;
+
+    return 0;
 }
