@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use super::{Lexer, ParserError, ParserErrorKind, Token, TokenType, UnexpectedToken};
 use crate::ast;
-use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, UnaryOp};
+use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, Incrementation, UnaryOp};
 
 pub struct Parser<'a> {
     lex: Peekable<&'a mut Lexer<'a>>,
@@ -149,7 +149,15 @@ impl<'a> Parser<'a> {
             TokenType::Identifier(i) => {
                 let ident = Rc::clone(&i);
                 self.advance_token()?;
-                Expr::Var(ident)
+                if self.current_token.kind == TokenType::Inc {
+                    self.eat(TokenType::Inc)?;
+                    Expr::PostfixInc(Incrementation::Increment, Box::new(Expr::Var(ident)))
+                } else if self.current_token.kind == TokenType::Dec {
+                    self.eat(TokenType::Dec)?;
+                    Expr::PostfixInc(Incrementation::Decrement, Box::new(Expr::Var(ident)))
+                } else {
+                    Expr::Var(ident)
+                }
             },
             TokenType::Minus => {
                 self.advance_token()?;
@@ -166,13 +174,31 @@ impl<'a> Parser<'a> {
                 let expr = self.parse_expr()?;
                 self.eat(TokenType::RParen)?;
 
-                expr
+                if self.current_token.kind == TokenType::Inc {
+                    self.eat(TokenType::Inc)?;
+                    Expr::PostfixInc(Incrementation::Increment, Box::new(expr))
+                } else if self.current_token.kind == TokenType::Dec {
+                    self.eat(TokenType::Dec)?;
+                    Expr::PostfixInc(Incrementation::Decrement, Box::new(expr))
+                } else {
+                    expr
+                }
             },
             TokenType::Not => {
                 self.eat(TokenType::Not)?;
                 let expr = self.parse_expr()?;
                 Expr::Unary(UnaryOp::Not, Box::new(expr))
-            }
+            },
+            TokenType::Inc => {
+                self.eat(TokenType::Inc)?;
+                let rhs = self.parse_expr()?;
+                Expr::PrefixInc(Incrementation::Increment, Box::new(rhs))
+            },
+            TokenType::Dec => {
+                self.eat(TokenType::Dec)?;
+                let rhs = self.parse_expr()?;
+                Expr::PrefixInc(Incrementation::Decrement, Box::new(rhs))
+            },
             _ => {
                 return Err(ParserError::new(self.current_token.line_num, ParserErrorKind::BadForm, self.filename))
             }
@@ -344,10 +370,76 @@ impl<'a> Parser<'a> {
     fn parse_expr(&mut self) -> Result<ast::Expr, ParserError> {
         let mut ret = self.expr0()?;
 
-        while self.current_token.kind == TokenType::Assignment {
-            self.eat(TokenType::Assignment)?;
-            let rhs = self.expr1()?;
-            ret = Expr::Assignment(Box::new(ret), Box::new(rhs))
+        while self.current_token.kind == TokenType::Assignment
+            || self.current_token.kind == TokenType::PlusEqual
+            || self.current_token.kind == TokenType::MinusEqual
+            || self.current_token.kind == TokenType::TimesEqual
+            || self.current_token.kind == TokenType::DivEqual
+            || self.current_token.kind == TokenType::ModEqual
+            || self.current_token.kind == TokenType::LeftShiftEqual
+            || self.current_token.kind == TokenType::RightShiftEqual
+            || self.current_token.kind == TokenType::BitwiseOrEqual
+            || self.current_token.kind == TokenType::BitwiseAndEqual
+            || self.current_token.kind == TokenType::BitwiseXOrEqual {
+            match self.current_token.kind {
+                TokenType::Assignment => {
+                    self.eat(TokenType::Assignment)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::Assignment(Box::new(ret), Box::new(rhs));
+                },
+                TokenType::PlusEqual => {
+                    self.eat(TokenType::PlusEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::Add, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::MinusEqual => {
+                    self.eat(TokenType::MinusEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::Subtract, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::TimesEqual => {
+                    self.eat(TokenType::TimesEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::Multiply, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::DivEqual => {
+                    self.eat(TokenType::DivEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::Divide, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::ModEqual => {
+                    self.eat(TokenType::ModEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::Remainder, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::LeftShiftEqual => {
+                    self.eat(TokenType::LeftShiftEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::LeftShift, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::RightShiftEqual => {
+                    self.eat(TokenType::RightShiftEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::RightShift, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::BitwiseAndEqual => {
+                    self.eat(TokenType::BitwiseAndEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::BitwiseAnd, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::BitwiseOrEqual => {
+                    self.eat(TokenType::BitwiseOrEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::BitwiseOr, Box::new(ret), Box::new(rhs));
+                },
+                TokenType::BitwiseXOrEqual => {
+                    self.eat(TokenType::BitwiseXOrEqual)?;
+                    let rhs = self.expr1()?;
+                    ret = Expr::CompoundAssignment(BinaryOp::BitwiseXor, Box::new(ret), Box::new(rhs));
+                },
+                _ => unreachable!(),
+            }
+
         }
 
         Ok(ret)

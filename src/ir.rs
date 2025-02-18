@@ -1,11 +1,8 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, Expr, Statement};
+use crate::ast::{BlockItem, Expr, Incrementation, Statement};
 
-/* intermediate representation
- * page 36 of the book
- */
 
 #[derive(Debug)]
 pub struct Program {
@@ -257,6 +254,24 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             dst
         },
+        Expr::CompoundAssignment(op, var, rhs) => {
+            let v = if let Expr::Var(x) = var.as_ref() {
+                x
+            } else {
+                panic!()
+            };
+
+            let rhs = emit_expr(rhs.as_ref(), es, insts);
+
+            insts.push(Instruction::Binary(
+                convert_binary(op),
+                Val::Var(Rc::clone(&v)),
+                rhs,
+                Val::Var(Rc::clone(&v)),
+            ));
+
+            Val::Var(Rc::clone(&v))
+        }
         Expr::Var(v) => Val::Var(Rc::clone(v)),
         Expr::Assignment(v, rhs) => {
             let result = emit_expr(&**rhs, es, insts);
@@ -272,6 +287,65 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             Val::Var(Rc::clone(&v))
         },
+
+        Expr::PrefixInc(incrementation, var) => {
+            /*
+                tmp.0 = var + 1
+                var = tmp.0
+                <return tmp.0>
+             */
+            let result = make_temporary_val(es);
+            let var = if let Expr::Var(ident) = var.as_ref() {
+                ident
+            } else {
+                panic!()
+            };
+
+            insts.push(Instruction::Binary(
+                match incrementation {
+                    Incrementation::Increment => BinaryOp::Add,
+                    Incrementation::Decrement => BinaryOp::Subtract,
+                },
+                Val::Var(Rc::clone(&var)),
+                Val::Constant(1),
+                result.clone(),
+            ));
+
+            insts.push(Instruction::Copy(
+                result.clone(),
+                Val::Var(Rc::clone(&var)),
+            ));
+
+            result
+        },
+        Expr::PostfixInc(incrementation, var) => {
+            /*
+                tmp.0 = var
+                var = var + 1
+                <return tmp.0>
+             */
+            let result = make_temporary_val(es);
+            let var = if let Expr::Var(ident) = var.as_ref() {
+                ident
+            } else {
+                panic!()
+            };
+            insts.push(Instruction::Copy(
+                Val::Var(Rc::clone(&var)),
+                result.clone(),
+            ));
+            insts.push(Instruction::Binary(
+               match incrementation {
+                   Incrementation::Increment => BinaryOp::Add,
+                   Incrementation::Decrement => BinaryOp::Subtract,
+               },
+               Val::Var(Rc::clone(&var)),
+               Val::Constant(1),
+               Val::Var(Rc::clone(&var)),
+            ));
+
+            result
+        }
     }
 }
 

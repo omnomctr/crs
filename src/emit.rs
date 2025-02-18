@@ -54,12 +54,12 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
         },
         Instruction::Binary(op, rhs, dst) => {
             if op == BinaryOp::LShift  {
-                write!(writer, "\tshll ")?;
+                write!(writer, "\tshll   ")?;
                 emit_operand(writer, rhs, WORD)?;
                 write!(writer, ", ")?;
                 emit_operand(writer, dst, DWORD)?;
             } else if op == BinaryOp::RShift {
-                write!(writer, "\tshrl ")?;
+                write!(writer, "\tshrl   ")?;
                 emit_operand(writer, rhs, WORD)?;
                 write!(writer, ", ")?;
                 emit_operand(writer, dst, DWORD)?;

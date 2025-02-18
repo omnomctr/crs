@@ -65,7 +65,7 @@ impl AnalysisState {
         };
 
         Ok(ast::Declaration {
-            name: name,
+            name,
             initializer: new_initializer,
         })
     }
@@ -117,7 +117,44 @@ impl AnalysisState {
                     Box::new(self.resolve_expr(*lhs)?),
                     Box::new(self.resolve_expr(*rhs)?)
                 )
-            }
+            },
+            Expr::PrefixInc(incrementation, expr) => {
+                if let Expr::Var(_) = *expr {
+                    Expr::PrefixInc(
+                        incrementation,
+                        Box::new(self.resolve_expr(*expr)?),
+                    )
+                } else {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::InvalidLvalue(*expr),
+                    })
+                }
+            },
+            Expr::PostfixInc(incrementation, expr) => {
+                if let Expr::Var(_) = *expr {
+                    Expr::PostfixInc(
+                        incrementation,
+                        Box::new(self.resolve_expr(*expr)?)
+                    )
+                } else {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::InvalidLvalue(*expr),
+                    })
+                }
+            },
+            Expr::CompoundAssignment(op, var, rhs) => {
+                if let Expr::Var(_) = *var {
+                    Expr::CompoundAssignment(
+                        op,
+                        Box::new(self.resolve_expr(*var)?),
+                        Box::new(self.resolve_expr(*rhs)?),
+                    )
+                } else {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::InvalidLvalue(*var),
+                    })
+                }
+            },
         })
     }
 }

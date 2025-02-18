@@ -37,6 +37,9 @@ pub enum Expr {
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
     Var(Identifier),
     Assignment(Box<Expr>, Box<Expr>), /* lvalue, '=', rvalue */
+    CompoundAssignment(BinaryOp, Box<Expr>, Box<Expr>), /* op, lvalue, rvalue */
+    PrefixInc(Incrementation, Box<Expr>), /* ++x / --x */
+    PostfixInc(Incrementation, Box<Expr>), /* x++ / x-- */
 }
 
 pub type Identifier = Rc<String>;
@@ -70,3 +73,8 @@ pub enum BinaryOp {
     GTE,
 }
 
+#[derive(Debug)]
+pub enum Incrementation {
+    Increment,
+    Decrement
+}

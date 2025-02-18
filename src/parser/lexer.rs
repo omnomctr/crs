@@ -38,6 +38,18 @@ pub enum TokenType {
     LTE,
     GTE,
     Assignment,
+    PlusEqual,
+    MinusEqual,
+    TimesEqual,
+    DivEqual,
+    ModEqual,
+    Inc,
+    Dec,
+    LeftShiftEqual,
+    RightShiftEqual,
+    BitwiseAndEqual,
+    BitwiseOrEqual,
+    BitwiseXOrEqual,
 }
 
 #[derive(Debug)]
@@ -101,17 +113,43 @@ impl<'a> Lexer<'a> {
             '}' => Tok::RSquirly,
             ';' => Tok::Semicolon,
             '~' => Tok::Complement,
+            '-' if peek == Some('=') => { self.read_char()?; Tok::PlusEqual },
+            '-' if peek == Some('-') => { self.read_char()?; Tok::Dec },
             '-' => Tok::Minus,
+            '+' if peek == Some('=') => { self.read_char()?; Tok::PlusEqual },
+            '+' if peek == Some('+') => { self.read_char()?;  Tok::Inc },
             '+' => Tok::Plus,
+            '/' if peek == Some('=') => { self.read_char()?; Tok::DivEqual },
             '/' => Tok::Divide,
+            '*' if peek == Some('=') => { self.read_char()?; Tok::TimesEqual },
             '*' => Tok::Times,
+            '%' if peek == Some('=') => { self.read_char()?; Tok::ModEqual },
             '%' => Tok::Mod,
+            '^' if peek == Some('=') => { self.read_char()?; Tok::BitwiseXOrEqual },
             '^' => Tok::BitwiseXor,
-            '<' if peek == Some('<') => { self.read_char()?; Tok::LeftShift },
-            '>' if peek == Some('>') => { self.read_char()?; Tok::RightShift },
+            '<' if peek == Some('<') => {
+                self.read_char()?;
+                if self.peek_char() == Some('=') {
+                    self.read_char()?;
+                    Tok::LeftShiftEqual
+                } else {
+                    Tok::LeftShift
+                }
+            },
+            '>' if peek == Some('>') => {
+                self.read_char()?;
+                if self.peek_char() == Some('=') {
+                    self.read_char()?;
+                    Tok::RightShiftEqual
+                } else {
+                    Tok::RightShift
+                }
+            },
             '&' if peek == Some('&') => { self.read_char()?; Tok::And },
+            '&' if peek == Some('=') => { self.read_char()?; Tok::BitwiseAndEqual },
             '&' => Tok::BitwiseAnd,
             '|' if peek == Some('|') => { self.read_char()?; Tok::Or },
+            '|' if peek == Some('|') => { self.read_char()?; Tok::BitwiseOrEqual },
             '|' => Tok::BitwiseOr,
             '=' if peek == Some('=') => { self.read_char()?; Tok::Eq },
             '=' => Tok::Assignment,

@@ -1,7 +1,11 @@
 int main(void)
 {
-    int a = 1;
-    int b = 2;
-    int c = a = b + a;
-    return a < b || a == b || c == a;
+    int a = 4;
+    a <<= 1;
+    a <<= 1;
+    a >>= 1;
+    a >>= 1;
+    int b = 32590;
+    b ^= b;
+    return b;
 }
