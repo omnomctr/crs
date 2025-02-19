@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, Expr, IfStatement, Incrementation, Statement};
+use crate::ast::{BlockItem, Expr, ForInitializer, IfStatement, Incrementation, Statement};
 
 
 #[derive(Debug)]
@@ -190,7 +190,7 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
                 end_label.clone()
             ));
 
-            emit_block(body, es, insts);
+            emit_statement(*body, es, insts);
 
             insts.push(Instruction::Jump(loop_label));
 
@@ -203,6 +203,86 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
         Statement::Continue(None) => panic!(),
         Statement::Continue(Some(id)) => {
             insts.push(Instruction::Jump(Rc::new(format!("continue.{}", id))))
+        }
+        Statement::DoWhile(_, _, None) => panic!(),
+        Statement::DoWhile(cond, body, Some(id)) => {
+            /*
+            .Lcontinue.<id>
+                <eval body>
+
+                cond = <eval cond>
+                if cond == 0 jmp .Lbreak.<id>
+                jmp .Lcontinue.<id>
+             .Lbreak.<id>
+
+             */
+
+            let continue_label = Rc::new(format!("continue.{}", id));
+            let break_label = Rc::new(format!("break.{}", id));
+
+            insts.push(Instruction::Label(continue_label.clone()));
+
+            emit_statement(*body, es, insts);
+
+            let cond = emit_expr(&cond, es, insts);
+            insts.push(Instruction::JumpZero(
+                cond,
+                break_label.clone()
+            ));
+
+            insts.push(Instruction::Jump(continue_label));
+
+            insts.push(Instruction::Label(break_label));
+        },
+        Statement::ForLoop(_, _, _, _, None) => panic!(),
+        Statement::ForLoop(expr1, expr2, expr3, body, Some(id)) => {
+            /*
+                <expr1, if exists>
+            .Lforstart.<id>
+                cond = <expr2, if exists, otherwise 1>
+                if cond == 0 jmp .Lbreak.<id>
+                <body>
+            .Lcontinue.<id>
+                <expr3, if exists>
+                jmp .Lforstart.<id>
+            .Lbreak.<id>
+
+             */
+
+            let start_label = Rc::new(format!("for_start.{}", id));
+            let continue_label = Rc::new(format!("continue.{}", id));
+            let break_label = Rc::new(format!("break.{}", id));
+
+            if let Some(expr1) = expr1 {
+                match expr1 {
+                    ForInitializer::Decl(x) => {
+                        // I cant be bothered to write this better
+                        emit_block(vec![BlockItem::D(x)], es, insts);
+                    }
+                    ForInitializer::Expr(e) => {
+                        emit_expr(&e, es, insts);
+                    }
+                }
+            }
+
+            insts.push(Instruction::Label(start_label.clone()));
+
+            if let Some(expr2) = expr2 {
+                let cond = emit_expr(&expr2, es, insts);
+                insts.push(Instruction::JumpZero(cond, break_label.clone()))
+            }
+
+            emit_statement(*body, es, insts);
+
+            insts.push(Instruction::Label(continue_label));
+
+            if let Some(expr3) = expr3 {
+                emit_expr(&expr3, es, insts);
+            }
+
+            insts.push(Instruction::Jump(start_label));
+
+            insts.push(Instruction::Label(break_label));
         }
     }
 }

@@ -58,6 +58,8 @@ pub enum TokenType {
     While,
     Break,
     Continue,
+    Do,
+    For,
 }
 
 #[derive(Debug)]
@@ -216,6 +218,8 @@ impl<'a> Lexer<'a> {
             "while" => Tok::While,
             "break" => Tok::Break,
             "continue" => Tok::Continue,
+            "do" => Tok::Do,
+            "for" => Tok::For,
             _ => Tok::Identifier(Rc::new(ident.into())),
         };
 

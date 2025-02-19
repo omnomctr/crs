@@ -28,9 +28,17 @@ pub enum Statement {
     LabeledStatement(Identifier, Box<Statement>), /* label: stmts for goto */
     JmpStatement(Identifier),
     Block(Block),
-    While(Expr, Block, Option<usize>), /* condition, body, label (used in semantic analysis */
+    While(Expr, Box<Statement>, Option<usize>), /* condition, body, label (used in semantic analysis */
+    DoWhile(Expr, Box<Statement>, Option<usize>),
     Break(Option<usize>),
-    Continue(Option<usize>)
+    Continue(Option<usize>),
+    ForLoop(Option<ForInitializer>, Option<Expr>, Option<Expr>, Box<Statement>, Option<usize>), /* for (1;2;3) 4 */
+}
+
+#[derive(Debug)]
+pub enum ForInitializer {
+    Decl(Declaration),
+    Expr(Expr)
 }
 
 #[derive(Debug)]

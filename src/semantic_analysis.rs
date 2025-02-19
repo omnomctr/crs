@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, IfStatement, Statement};
+use crate::ast::{BlockItem, ForInitializer, IfStatement, Statement};
 
 struct AnalysisState {
     label_map: HashMap<ast::Identifier, ast::Identifier>,
@@ -106,16 +106,18 @@ impl AnalysisState {
         let mut body = Vec::with_capacity(block.len());
         let mut scope_ = ScopeMap::new(Some(scope));
         for block_item in block {
-            use ast::BlockItem as BlockItem;
-            body.push(
-                match block_item {
-                    BlockItem::S(s) => BlockItem::S(self.resolve_statement(s, &mut scope_, loop_id)?),
-                    BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d, &mut scope_)?),
-                }
-            )
+            body.push(self.resolve_block_item(block_item, &mut scope_, loop_id)?);
         }
 
         Ok(body)
+    }
+
+    fn resolve_block_item(&mut self, block_item: BlockItem, scope: &mut ScopeMap, loop_id: Option<usize>) -> AnalysisResult<BlockItem> {
+        use ast::BlockItem as BlockItem;
+        Ok(match block_item {
+            BlockItem::S(s) => BlockItem::S(self.resolve_statement(s, scope, loop_id)?),
+            BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d, scope)?),
+        })
     }
     fn resolve_declaration(&mut self, decl: ast::Declaration, scope: &mut ScopeMap) -> AnalysisResult<ast::Declaration> {
         if scope.contains_at_current_scope(&decl.name) {
@@ -176,7 +178,7 @@ impl AnalysisState {
 
                 Statement::While(
                     self.resolve_expr(condition, scope)?,
-                    self.resolve_block(body, scope, Some(id))?,
+                    Box::new(self.resolve_statement(*body, scope, Some(id))?),
                     Some(id),
                 )
             },
@@ -189,7 +191,7 @@ impl AnalysisState {
                 }
 
                 Statement::Continue(loop_id)
-            }
+            },
             Statement::Break(id) => {
                 assert_eq!(id, None);
                 if loop_id == None {
@@ -198,7 +200,40 @@ impl AnalysisState {
                     });
                 }
                 Statement::Break(loop_id)
-            }
+            },
+            Statement::DoWhile(cond, body,id) => {
+                assert_eq!(id, None);
+
+                let id = self.loop_id;
+                self.loop_id += 1;
+
+                Statement::DoWhile(
+                    self.resolve_expr(cond, scope)?,
+                    Box::new(self.resolve_statement(*body, scope, Some(id))?),
+                    Some(id),
+                )
+            },
+            Statement::ForLoop(expr1, expr2, expr3, body, id) => {
+                assert_eq!(id, None);
+
+                let scope = &mut ScopeMap::new(Some(scope));
+
+                let id = self.loop_id;
+                self.loop_id += 1;
+
+                Statement::ForLoop(
+                    expr1.map(|b| {
+                        Ok(match b {
+                            ForInitializer::Decl(d) => ForInitializer::Decl(self.resolve_declaration(d, scope)?),
+                            ForInitializer::Expr(e) => ForInitializer::Expr(self.resolve_expr(e, scope)?),
+                        })
+                    }).transpose()?,
+                    expr2.map(|x| self.resolve_expr(x, scope)).transpose()?,
+                    expr3.map(|x| self.resolve_expr(x, scope)).transpose()?,
+                    Box::new(self.resolve_statement(*body, scope, Some(id))?),
+                    Some(id)
+                )
+            },
         })
     }
 
@@ -345,16 +380,16 @@ impl AnalysisState {
             },
 
             Statement::While(cond, body, id) => {
-                Statement::While(cond, {
-                    let mut block = Vec::with_capacity(body.len());
-                    for item in body {
-                        block.push(self.resolve_goto_block_item(item)?)
-                    }
-                    block
-                }, id)
+                Statement::While(cond, Box::new(self.resolve_goto_statement(*body)?), id)
             },
             Statement::Break(_) => stmt,
             Statement::Continue(_) => stmt,
+            Statement::DoWhile(cond, body, id) => {
+                Statement::DoWhile(cond, Box::new(self.resolve_goto_statement(*body)?), id)
+            }
+            Statement::ForLoop(expr1, expr2, expr3, body, id) => {
+                Statement::ForLoop(expr1, expr2, expr3, Box::new(self.resolve_goto_statement(*body)?), id)
+            }
         })
     }
 }
