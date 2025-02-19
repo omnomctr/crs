@@ -21,5 +21,11 @@ label:
     if (x < 100)
         goto label;
 
-    return (a == b) ? 5 : x;
+    int c = 4;
+    {
+        int c = 5;
+    }
+    // c == 4
+
+    return (a == b) ? 5 : c;
 }

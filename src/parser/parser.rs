@@ -77,19 +77,24 @@ impl<'a> Parser<'a> {
         self.eat(TokenType::LParen)?;
         self.eat(TokenType::VoidKeyword)?;
         self.eat(TokenType::RParen)?;
-        self.eat(TokenType::LSquirly)?;
 
-        let mut block_items = Vec::new();
-        while self.current_token.kind != TokenType::RSquirly {
-            block_items.push(self.parse_block_item()?);
-        }
-
-        self.eat(TokenType::RSquirly)?;
-
+        let body = self.parse_block()?;
 
         Ok(ast::Function {
-            name, body: block_items,
+            name, body,
         })
+    }
+
+    fn parse_block(&mut self) -> Result<ast::Block, ParserError> {
+        self.eat(TokenType::LSquirly)?;
+
+        let mut block = Vec::new();
+        while self.current_token.kind != TokenType::RSquirly {
+            block.push(self.parse_block_item()?)
+        }
+        self.eat(TokenType::RSquirly)?;
+
+        Ok(block)
     }
 
     fn parse_block_item(&mut self) -> Result<ast::BlockItem, ParserError> {
@@ -163,11 +168,7 @@ impl<'a> Parser<'a> {
 
                 let mut then = Vec::new();
                 if self.current_token.kind == TokenType::LSquirly {
-                    self.eat(TokenType::LSquirly)?;
-                    while self.current_token.kind != TokenType::RSquirly {
-                        then.push(self.parse_block_item()?);
-                    }
-                    self.eat(TokenType::RSquirly)?;
+                    then = self.parse_block()?;
                 } else {
                     then.push(self.parse_block_item()?);
                 }
@@ -176,11 +177,7 @@ impl<'a> Parser<'a> {
                     self.eat(TokenType::Else)?;
                     let mut else_block = Vec::new();
                     if self.current_token.kind == TokenType::LSquirly {
-                        self.eat(TokenType::LSquirly)?;
-                        while self.current_token.kind != TokenType::RSquirly {
-                            else_block.push(self.parse_block_item()?);
-                        }
-                        self.eat(TokenType::RSquirly)?;
+                        else_block = self.parse_block()?;
                     } else {
                         else_block.push(self.parse_block_item()?);
                     }
@@ -195,6 +192,9 @@ impl<'a> Parser<'a> {
                     otherwise,
                 });
                 Ok(stmt)
+            },
+            TokenType::LSquirly => {
+                Ok(ast::Statement::Block(self.parse_block()?))
             },
             _ => {
                 let expr = self.parse_expr()?;

@@ -163,7 +163,8 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
         }
         Statement::JmpStatement(lbl) => {
             insts.push(Instruction::Jump(Rc::clone(&lbl)));
-        }
+        },
+        Statement::Block(block) => emit_block(block, es, insts)
     }
 }
 

@@ -27,6 +27,7 @@ pub enum Statement {
     Empty, /* eg while(1) ; <- in between the paren and semicolon */
     LabeledStatement(Identifier, Box<Statement>), /* label: stmts for goto */
     JmpStatement(Identifier),
+    Block(Block),
 }
 
 #[derive(Debug)]

@@ -4,7 +4,7 @@ use crate::ast;
 use crate::ast::{BlockItem, IfStatement, Statement};
 
 struct AnalysisState {
-    variable_map: HashMap<ast::Identifier, ast::Identifier>,
+    //variable_map: Rc<ScopeMap>,
     label_map: HashMap<ast::Identifier, ast::Identifier>,
     temp_var_increment: usize,
     temp_label_increment: usize,
@@ -28,15 +28,67 @@ pub enum SemanticAnalysisErrorKind {
 
 type AnalysisResult<T> = Result<T, SemanticAnalysisError>;
 
+pub struct ScopeMap<'a> {
+    variable_map: HashMap<ast::Identifier, ast::Identifier>,
+    parent: Option<&'a ScopeMap<'a>>
+}
+
+pub struct VariableEntry {
+    unique_name: ast::Identifier,
+    from_current_block: bool,
+}
+
+impl<'a> ScopeMap<'a> {
+    pub fn new(parent: Option<&'a ScopeMap>) -> ScopeMap<'a> {
+        ScopeMap {
+            variable_map: HashMap::new(),
+            parent
+        }
+    }
+
+    pub fn get(&self, ident: &ast::Identifier) -> Option<VariableEntry> {
+        match self.variable_map.get(ident) {
+            Some(x) => {
+                Some(VariableEntry {
+                    unique_name: Rc::clone(&x),
+                    from_current_block: true
+                })
+            }
+            None => {
+                self.parent.as_ref().and_then(|map| {
+                    map.get(ident).map(|mut entry| {
+                        entry.from_current_block = false;
+                        entry
+                    })
+                })
+            }
+        }
+    }
+
+    pub fn contains_at_current_scope(&self, ident: &ast::Identifier) -> bool {
+        self.variable_map.contains_key(ident)
+    }
+
+    pub fn insert(&mut self, ident: ast::Identifier, name: ast::Identifier) -> Option<ast::Identifier> {
+        self.variable_map.insert(ident, name)
+    }
+
+    pub fn contains_key(&self, ident: &ast::Identifier) -> bool {
+        self.variable_map.contains_key(ident) || self.parent.is_some_and(|x| x.contains_key(ident))
+    }
+}
+
 pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
     let mut state = AnalysisState {
-        variable_map: HashMap::new(),
+     //   variable_map: ScopeMap::new(None),
         label_map: HashMap::new(),
         temp_var_increment: 0,
         temp_label_increment: 0,
     };
 
-    let body = state.resolve_block(ast.f.body)?;
+    let mut scope = ScopeMap::new(None);
+
+    let body = state.resolve_block(ast.f.body, &mut scope)?;
     let body = state.resolve_goto(body)?;
 
     Ok(ast::Program {
@@ -48,30 +100,31 @@ pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
 }
 
 impl AnalysisState {
-    fn resolve_block(&mut self, block: ast::Block) -> AnalysisResult<ast::Block> {
+    fn resolve_block(&mut self, block: ast::Block, scope: &mut ScopeMap) -> AnalysisResult<ast::Block> {
         let mut body = Vec::with_capacity(block.len());
+        let mut scope_ = ScopeMap::new(Some(scope));
         for block_item in block {
             use ast::BlockItem as BlockItem;
             body.push(
                 match block_item {
-                    BlockItem::S(s) => BlockItem::S(self.resolve_statement(s)?),
-                    BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d)?),
+                    BlockItem::S(s) => BlockItem::S(self.resolve_statement(s, &mut scope_)?),
+                    BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d, &mut scope_)?),
                 }
             )
         }
 
         Ok(body)
     }
-    fn resolve_declaration(&mut self, decl: ast::Declaration) -> AnalysisResult<ast::Declaration> {
-        if self.variable_map.contains_key(&decl.name) {
+    fn resolve_declaration(&mut self, decl: ast::Declaration, scope: &mut ScopeMap) -> AnalysisResult<ast::Declaration> {
+        if scope.contains_at_current_scope(&decl.name) {
             return Err(SemanticAnalysisError {
                 reason: SemanticAnalysisErrorKind::DuplicateVariableDecl(Rc::clone(&decl.name)),
             })
         }
 
         let name = self.make_temporary_var(&decl.name);
-        self.variable_map.insert(Rc::clone(&decl.name), Rc::clone(&name));
-        let new_initializer = decl.initializer.map(|x| self.resolve_expr(x)).transpose()?;
+        scope.insert(Rc::clone(&decl.name), Rc::clone(&name));
+        let new_initializer = decl.initializer.map(|x| self.resolve_expr(x, scope)).transpose()?;
 
         Ok(ast::Declaration {
             name,
@@ -79,11 +132,11 @@ impl AnalysisState {
         })
     }
 
-    fn resolve_statement(&mut self, stmt: ast::Statement) -> AnalysisResult<ast::Statement> {
+    fn resolve_statement(&mut self, stmt: ast::Statement, scope: &mut ScopeMap) -> AnalysisResult<ast::Statement> {
         use ast::Statement as Statement;
         Ok(match stmt {
-            Statement::Return(e) => Statement::Return(self.resolve_expr(e)?),
-            Statement::Expression(e) => Statement::Expression(self.resolve_expr(e)?),
+            Statement::Return(e) => Statement::Return(self.resolve_expr(e, scope)?),
+            Statement::Expression(e) => Statement::Expression(self.resolve_expr(e, scope)?),
             Statement::Empty => Statement::Empty,
             Statement::LabeledStatement(lbl, rhs) => {
                 if self.label_map.contains_key(&lbl) {
@@ -97,19 +150,22 @@ impl AnalysisState {
 
                 Statement::LabeledStatement(
                     name,
-                    Box::new(self.resolve_statement(*rhs)?)
+                    Box::new(self.resolve_statement(*rhs, scope)?)
                 )
             },
             Statement::If(IfStatement { condition, then, otherwise }) => {
                 Statement::If(
                     IfStatement{
-                        condition: self.resolve_expr(condition)?,
-                        then: self.resolve_block(then)?,
-                        otherwise: otherwise.map(|x| self.resolve_block(x)).transpose()?
+                        condition: self.resolve_expr(condition, scope)?,
+                        then: self.resolve_block(then, scope)?,
+                        otherwise: otherwise.map(|x| self.resolve_block(x, scope)).transpose()?
                     }
                 )
             }
-            stmt @ Statement::JmpStatement(_) => stmt
+            stmt @ Statement::JmpStatement(_) => stmt,
+            Statement::Block(block) => {
+                Statement::Block(self.resolve_block(block, scope)?)
+            }
         })
     }
 
@@ -125,15 +181,15 @@ impl AnalysisState {
         Rc::new(ret)
     }
 
-    fn resolve_expr(&mut self, expr: ast::Expr) -> AnalysisResult<ast::Expr> {
+    fn resolve_expr(&mut self, expr: ast::Expr, scope: &mut ScopeMap) -> AnalysisResult<ast::Expr> {
         use ast::Expr as Expr;
         Ok(match expr {
             Expr::Constant(_) => expr,
             Expr::Assignment(lval, rval) => {
                 if let Expr::Var(_) = *lval {
                     Expr::Assignment(
-                        Box::new(self.resolve_expr(*lval)?),
-                        Box::new(self.resolve_expr(*rval)?),
+                        Box::new(self.resolve_expr(*lval, scope)?),
+                        Box::new(self.resolve_expr(*rval, scope)?),
                     )
                 } else {
                     return Err(SemanticAnalysisError {
@@ -142,27 +198,27 @@ impl AnalysisState {
                 }
             },
             Expr::Var(ident) => {
-                if !self.variable_map.contains_key(&ident) {
+                if !scope.contains_key(&ident) {
                     return Err(SemanticAnalysisError{
                         reason: SemanticAnalysisErrorKind::UndeclaredVariable(Rc::clone(&ident)),
                     });
                 }
 
-                Expr::Var(Rc::clone(self.variable_map.get(&ident).unwrap()))
+                Expr::Var(Rc::clone(&scope.get(&ident).unwrap().unique_name))
             },
-            Expr::Unary(op, rhs) => Expr::Unary(op, Box::new(self.resolve_expr(*rhs)?)),
+            Expr::Unary(op, rhs) => Expr::Unary(op, Box::new(self.resolve_expr(*rhs, scope)?)),
             Expr::Binary(op, lhs, rhs) => {
                 Expr::Binary(
                     op,
-                    Box::new(self.resolve_expr(*lhs)?),
-                    Box::new(self.resolve_expr(*rhs)?)
+                    Box::new(self.resolve_expr(*lhs, scope)?),
+                    Box::new(self.resolve_expr(*rhs, scope)?)
                 )
             },
             Expr::PrefixInc(incrementation, expr) => {
                 if let Expr::Var(_) = *expr {
                     Expr::PrefixInc(
                         incrementation,
-                        Box::new(self.resolve_expr(*expr)?),
+                        Box::new(self.resolve_expr(*expr, scope)?),
                     )
                 } else {
                     return Err(SemanticAnalysisError {
@@ -174,7 +230,7 @@ impl AnalysisState {
                 if let Expr::Var(_) = *expr {
                     Expr::PostfixInc(
                         incrementation,
-                        Box::new(self.resolve_expr(*expr)?)
+                        Box::new(self.resolve_expr(*expr, scope)?)
                     )
                 } else {
                     return Err(SemanticAnalysisError {
@@ -186,8 +242,8 @@ impl AnalysisState {
                 if let Expr::Var(_) = *var {
                     Expr::CompoundAssignment(
                         op,
-                        Box::new(self.resolve_expr(*var)?),
-                        Box::new(self.resolve_expr(*rhs)?),
+                        Box::new(self.resolve_expr(*var, scope)?),
+                        Box::new(self.resolve_expr(*rhs, scope)?),
                     )
                 } else {
                     return Err(SemanticAnalysisError {
@@ -197,9 +253,9 @@ impl AnalysisState {
             },
             Expr::Ternary(cond, then, otherwise) => {
                 Expr::Ternary(
-                    Box::new(self.resolve_expr(*cond)?),
-                    Box::new(self.resolve_expr(*then)?),
-                    Box::new(self.resolve_expr(*otherwise)?)
+                    Box::new(self.resolve_expr(*cond, scope)?),
+                    Box::new(self.resolve_expr(*then, scope)?),
+                    Box::new(self.resolve_expr(*otherwise, scope)?)
                 )
             },
         })
@@ -208,15 +264,19 @@ impl AnalysisState {
     fn resolve_goto(&mut self, block: ast::Block) -> AnalysisResult<ast::Block> {
         let mut block_ = Vec::with_capacity(block.len());
         for item in block {
-            block_.push(match item {
-                BlockItem::S(s) => {
-                    BlockItem::S(self.resolve_goto_statement(s)?)
-                },
-                decl @ BlockItem::D(_) => decl // we don't need to worry about statements
-            })
+            block_.push(self.resolve_goto_block_item(item)?)
         }
 
         Ok(block_)
+    }
+
+    fn resolve_goto_block_item(&mut self, item: ast::BlockItem) -> AnalysisResult<ast::BlockItem> {
+        Ok(match item {
+            BlockItem::S(s) => {
+                BlockItem::S(self.resolve_goto_statement(s)?)
+            },
+            decl @ BlockItem::D(_) => decl // we don't need to worry about statements
+        })
     }
 
     fn resolve_goto_statement(&mut self, stmt: ast::Statement) -> AnalysisResult<ast::Statement> {
@@ -242,6 +302,14 @@ impl AnalysisState {
                 }
                 Statement::JmpStatement(Rc::clone(self.label_map.get(&lbl).unwrap()))
             }
+            Statement::Block(block) => {
+                let mut block_ = Vec::with_capacity(block.len());
+                for item in block {
+                    block_.push(self.resolve_goto_block_item(item)?)
+                }
+
+                ast::Statement::Block(block_)
+            },
         })
     }
 }
