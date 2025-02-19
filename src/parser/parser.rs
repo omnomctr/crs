@@ -213,9 +213,11 @@ impl<'a> Parser<'a> {
                 Ok(ast::Statement::While(condition, Box::new(body), None))
             },
             TokenType::Break => {
+                self.eat(TokenType::Break)?;
                 Ok(ast::Statement::Break(None))
             },
             TokenType::Continue => {
+                self.eat(TokenType::Continue)?;
                 Ok(ast::Statement::Continue(None))
             },
             TokenType::Do => {
@@ -260,7 +262,6 @@ impl<'a> Parser<'a> {
                 };
 
                 self.eat(TokenType::RParen)?;
-
                 let body = self.parse_statement()?;
 
                 Ok(ast::Statement::ForLoop(expr1, expr2, expr3, Box::new(body), None))

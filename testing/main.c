@@ -31,6 +31,7 @@ int main(void)
     for (x = 0; x < 1000; x++) {
         for (int y = 0; y < x; y++)
             ;
+        break;
     }
 
     return (x == b) ? 5 : x;
