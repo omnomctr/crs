@@ -28,6 +28,9 @@ pub enum Statement {
     LabeledStatement(Identifier, Box<Statement>), /* label: stmts for goto */
     JmpStatement(Identifier),
     Block(Block),
+    While(Expr, Block, Option<usize>), /* condition, body, label (used in semantic analysis */
+    Break(Option<usize>),
+    Continue(Option<usize>)
 }
 
 #[derive(Debug)]

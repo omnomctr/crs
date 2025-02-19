@@ -16,16 +16,17 @@ int main(void)
     }
 
     int x = 0;
-label:
-    x++;
-    if (x < 100)
-        goto label;
+    while (x++ < 100) {
+        int y = 0;
+        while (y++ < 100)
+            ;
+    }
 
     int c = 4;
     {
         int c = 5;
     }
-    // c == 4
 
-    return (a == b) ? 5 : c;
+
+    return (x == b) ? 5 : c;
 }

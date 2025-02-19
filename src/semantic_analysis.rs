@@ -4,10 +4,10 @@ use crate::ast;
 use crate::ast::{BlockItem, IfStatement, Statement};
 
 struct AnalysisState {
-    //variable_map: Rc<ScopeMap>,
     label_map: HashMap<ast::Identifier, ast::Identifier>,
     temp_var_increment: usize,
     temp_label_increment: usize,
+    loop_id: usize // for breaks / continues
 }
 
 #[derive(Debug)]
@@ -24,6 +24,8 @@ pub enum SemanticAnalysisErrorKind {
     InvalidLvalue(ast::Expr),
     DuplicateLabelDecl(ast::Identifier),
     UndeclaredLabel(ast::Identifier),
+    IllegalBreak,
+    IllegalContinue,
 }
 
 type AnalysisResult<T> = Result<T, SemanticAnalysisError>;
@@ -80,15 +82,15 @@ impl<'a> ScopeMap<'a> {
 
 pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
     let mut state = AnalysisState {
-     //   variable_map: ScopeMap::new(None),
         label_map: HashMap::new(),
         temp_var_increment: 0,
         temp_label_increment: 0,
+        loop_id: 0,
     };
 
     let mut scope = ScopeMap::new(None);
 
-    let body = state.resolve_block(ast.f.body, &mut scope)?;
+    let body = state.resolve_block(ast.f.body, &mut scope, None)?;
     let body = state.resolve_goto(body)?;
 
     Ok(ast::Program {
@@ -100,14 +102,14 @@ pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
 }
 
 impl AnalysisState {
-    fn resolve_block(&mut self, block: ast::Block, scope: &mut ScopeMap) -> AnalysisResult<ast::Block> {
+    fn resolve_block(&mut self, block: ast::Block, scope: &mut ScopeMap, loop_id: Option<usize>) -> AnalysisResult<ast::Block> {
         let mut body = Vec::with_capacity(block.len());
         let mut scope_ = ScopeMap::new(Some(scope));
         for block_item in block {
             use ast::BlockItem as BlockItem;
             body.push(
                 match block_item {
-                    BlockItem::S(s) => BlockItem::S(self.resolve_statement(s, &mut scope_)?),
+                    BlockItem::S(s) => BlockItem::S(self.resolve_statement(s, &mut scope_, loop_id)?),
                     BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d, &mut scope_)?),
                 }
             )
@@ -132,7 +134,7 @@ impl AnalysisState {
         })
     }
 
-    fn resolve_statement(&mut self, stmt: ast::Statement, scope: &mut ScopeMap) -> AnalysisResult<ast::Statement> {
+    fn resolve_statement(&mut self, stmt: ast::Statement, scope: &mut ScopeMap, loop_id: Option<usize>) -> AnalysisResult<ast::Statement> {
         use ast::Statement as Statement;
         Ok(match stmt {
             Statement::Return(e) => Statement::Return(self.resolve_expr(e, scope)?),
@@ -150,21 +152,52 @@ impl AnalysisState {
 
                 Statement::LabeledStatement(
                     name,
-                    Box::new(self.resolve_statement(*rhs, scope)?)
+                    Box::new(self.resolve_statement(*rhs, scope, loop_id)?)
                 )
             },
             Statement::If(IfStatement { condition, then, otherwise }) => {
                 Statement::If(
                     IfStatement{
                         condition: self.resolve_expr(condition, scope)?,
-                        then: self.resolve_block(then, scope)?,
-                        otherwise: otherwise.map(|x| self.resolve_block(x, scope)).transpose()?
+                        then: self.resolve_block(then, scope, loop_id)?,
+                        otherwise: otherwise.map(|x| self.resolve_block(x, scope, loop_id)).transpose()?
                     }
                 )
             }
             stmt @ Statement::JmpStatement(_) => stmt,
             Statement::Block(block) => {
-                Statement::Block(self.resolve_block(block, scope)?)
+                Statement::Block(self.resolve_block(block, scope, loop_id)?)
+            }
+            Statement::While(condition, body, id) => {
+                assert_eq!(id, None);
+
+                let id = self.loop_id;
+                self.loop_id += 1;
+
+                Statement::While(
+                    self.resolve_expr(condition, scope)?,
+                    self.resolve_block(body, scope, Some(id))?,
+                    Some(id),
+                )
+            },
+            Statement::Continue(id) => {
+                assert_eq!(id, None);
+                if loop_id == None {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::IllegalContinue
+                    });
+                }
+
+                Statement::Continue(loop_id)
+            }
+            Statement::Break(id) => {
+                assert_eq!(id, None);
+                if loop_id == None {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::IllegalBreak
+                    });
+                }
+                Statement::Break(loop_id)
             }
         })
     }
@@ -310,6 +343,18 @@ impl AnalysisState {
 
                 ast::Statement::Block(block_)
             },
+
+            Statement::While(cond, body, id) => {
+                Statement::While(cond, {
+                    let mut block = Vec::with_capacity(body.len());
+                    for item in body {
+                        block.push(self.resolve_goto_block_item(item)?)
+                    }
+                    block
+                }, id)
+            },
+            Statement::Break(_) => stmt,
+            Statement::Continue(_) => stmt,
         })
     }
 }

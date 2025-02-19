@@ -55,6 +55,9 @@ pub enum TokenType {
     QuestionMark,
     Colon,
     Goto,
+    While,
+    Break,
+    Continue,
 }
 
 #[derive(Debug)]
@@ -210,6 +213,9 @@ impl<'a> Lexer<'a> {
             "if" => Tok::If,
             "else" => Tok::Else,
             "goto" => Tok::Goto,
+            "while" => Tok::While,
+            "break" => Tok::Break,
+            "continue" => Tok::Continue,
             _ => Tok::Identifier(Rc::new(ident.into())),
         };
 

@@ -164,7 +164,46 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
         Statement::JmpStatement(lbl) => {
             insts.push(Instruction::Jump(Rc::clone(&lbl)));
         },
-        Statement::Block(block) => emit_block(block, es, insts)
+        Statement::Block(block) => emit_block(block, es, insts),
+        Statement::While(_, _, None) => panic!(),
+        Statement::While(cond, body, Some(id)) => {
+            /*
+             .Lloop<id>
+                cond = <eval cond>
+                if cond == 0 jmp .Lloop<id>end
+
+                <eval body>
+
+                jmp .Lloop<id>
+             .Lbreak.<id>
+
+             */
+            let loop_label = Rc::new(format!("continue.{}", id));
+            let end_label = Rc::new(format!("break.{}", id));
+
+            insts.push(Instruction::Label(loop_label.clone()));
+
+            let cond = emit_expr(&cond, es, insts);
+
+            insts.push(Instruction::JumpZero(
+                cond,
+                end_label.clone()
+            ));
+
+            emit_block(body, es, insts);
+
+            insts.push(Instruction::Jump(loop_label));
+
+            insts.push(Instruction::Label(end_label))
+        }
+        Statement::Break(None) => panic!(),
+        Statement::Break(Some(id)) => {
+            insts.push(Instruction::Jump(Rc::new(format!("break.{}", id))))
+        }
+        Statement::Continue(None) => panic!(),
+        Statement::Continue(Some(id)) => {
+            insts.push(Instruction::Jump(Rc::new(format!("continue.{}", id))))
+        }
     }
 }
 

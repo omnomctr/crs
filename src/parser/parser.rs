@@ -3,6 +3,7 @@ use std::rc::Rc;
 use super::{Lexer, ParserError, ParserErrorKind, Token, TokenType, UnexpectedToken};
 use crate::ast;
 use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, IfStatement, Incrementation, Statement, UnaryOp};
+use crate::ast::BlockItem::S;
 
 pub struct Parser<'a> {
     lex: Peekable<&'a mut Lexer<'a>>,
@@ -195,6 +196,31 @@ impl<'a> Parser<'a> {
             },
             TokenType::LSquirly => {
                 Ok(ast::Statement::Block(self.parse_block()?))
+            },
+            TokenType::While => {
+                self.eat(TokenType::While)?;
+                self.eat(TokenType::LParen)?;
+                let condition = self.parse_expr()?;
+                self.eat(TokenType::RParen)?;
+
+                let body = if self.current_token.kind == TokenType::LSquirly {
+                    self.parse_block()?
+                } else {
+                    if self.current_token.kind == TokenType::Semicolon {
+                        self.eat(TokenType::Semicolon)?;
+                        Vec::new()
+                    } else {
+                        vec![S(self.parse_statement()?)]
+                    }
+                };
+
+                Ok(ast::Statement::While(condition, body, None))
+            },
+            TokenType::Break => {
+                Ok(ast::Statement::Break(None))
+            },
+            TokenType::Continue => {
+                Ok(ast::Statement::Continue(None))
             },
             _ => {
                 let expr = self.parse_expr()?;
