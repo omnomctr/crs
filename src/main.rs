@@ -88,8 +88,8 @@ fn main() {
         },
         CompilationStage::Unspecified => {
             let ast = Parser::parse(infile_str.as_str(), infile.as_str()).unwrap();
-            let ast_ = analyse(ast).unwrap();
-            let ir = emit_ir(ast_);
+            let ast = analyse(ast).unwrap();
+            let ir = emit_ir(ast);
             let asm = to_assembly_program(ir);
             let out = File::create(outfile).unwrap();
             emit(out, asm).unwrap();

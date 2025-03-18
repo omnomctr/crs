@@ -1,6 +1,13 @@
-int main(void)
+int foo(int a, int b)
 {
+    return a + b;
+}
+
+int main()
+{
+    foo(1,2);
     int a = 4;
+    int foo = 2;
     a <<= 1;
     a <<= 1;
     a >>= 1;

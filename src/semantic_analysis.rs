@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, ForInitializer, IfStatement, Statement};
+use crate::ast::{BlockItem, Declaration, IfStatement, Statement};
 
 struct AnalysisState {
     label_map: HashMap<ast::Identifier, ast::Identifier>,
     temp_var_increment: usize,
     temp_label_increment: usize,
-    loop_id: usize // for breaks / continues
+    loop_id_increment: usize, // for breaks / continues
+    function_map: HashMap<ast::Identifier, FunctionEntry>,
 }
 
 #[derive(Debug)]
@@ -26,6 +27,14 @@ pub enum SemanticAnalysisErrorKind {
     UndeclaredLabel(ast::Identifier),
     IllegalBreak,
     IllegalContinue,
+    DuplicateFunctionDefinition(ast::Identifier),
+    WrongFunctionArity(ast::Identifier, usize, usize), /* name, expected, got */
+    UndeclaredFunction(ast::Identifier),
+}
+
+pub struct FunctionEntry {
+    has_body: bool,
+    arity: usize,
 }
 
 type AnalysisResult<T> = Result<T, SemanticAnalysisError>;
@@ -85,19 +94,19 @@ pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
         label_map: HashMap::new(),
         temp_var_increment: 0,
         temp_label_increment: 0,
-        loop_id: 0,
+        loop_id_increment: 0,
+        function_map: HashMap::new(),
     };
 
     let mut scope = ScopeMap::new(None);
 
-    let body = state.resolve_block(ast.f.body, &mut scope, None)?;
-    let body = state.resolve_goto(body)?;
+    let mut functions = Vec::with_capacity(ast.functions.len());
+    for function in ast.functions {
+        functions.push(state.resolve_function_declaration(function, &mut scope)?);
+    }
 
     Ok(ast::Program {
-        f: ast::Function {
-            name: ast.f.name,
-            body,
-        }
+        functions
     })
 }
 
@@ -119,7 +128,14 @@ impl AnalysisState {
             BlockItem::D(d) => BlockItem::D(self.resolve_declaration(d, scope)?),
         })
     }
+
     fn resolve_declaration(&mut self, decl: ast::Declaration, scope: &mut ScopeMap) -> AnalysisResult<ast::Declaration> {
+        Ok(match decl {
+            Declaration::Fun(f) => Declaration::Fun(self.resolve_function_declaration(f, scope)?),
+            Declaration::Var(v) => Declaration::Var(self.resolve_variable_declaration(v, scope)?),
+        })
+    }
+    fn resolve_variable_declaration(&mut self, decl: ast::VariableDeclaration, scope: &mut ScopeMap) -> AnalysisResult<ast::VariableDeclaration> {
         if scope.contains_at_current_scope(&decl.name) {
             return Err(SemanticAnalysisError {
                 reason: SemanticAnalysisErrorKind::DuplicateVariableDecl(Rc::clone(&decl.name)),
@@ -130,9 +146,57 @@ impl AnalysisState {
         scope.insert(Rc::clone(&decl.name), Rc::clone(&name));
         let new_initializer = decl.initializer.map(|x| self.resolve_expr(x, scope)).transpose()?;
 
-        Ok(ast::Declaration {
+        Ok(ast::VariableDeclaration {
             name,
             initializer: new_initializer,
+        })
+    }
+
+    fn resolve_function_declaration(&mut self, decl: ast::FunctionDeclaration, scope: &mut ScopeMap) -> AnalysisResult<ast::FunctionDeclaration> {
+        // function is already defined
+        match self.function_map.get(&decl.name) {
+            Some(FunctionEntry { has_body: true, .. }) => {
+                return Err(SemanticAnalysisError {
+                    reason: SemanticAnalysisErrorKind::DuplicateFunctionDefinition(decl.name),
+                });
+            },
+            Some(FunctionEntry { arity, .. }) if *arity != decl.params.len() => {
+                return Err(SemanticAnalysisError {
+                    reason: SemanticAnalysisErrorKind::WrongFunctionArity(decl.name, *arity, decl.params.len())
+                });
+            },
+            None => {
+                self.function_map.insert(Rc::clone(&decl.name), FunctionEntry { has_body: decl.body.is_some(), arity: decl.params.len() });
+            },
+            _ => {}
+        }
+
+        // TODO: merge regular variable identifier and function identifier "namespace"
+        // right now this code compiles:
+        //  int foo(void);
+        //  int main(void) {
+        //      int foo = 0;
+        //      foo++; // refers to foo variable
+        //      foo(); // refers to foo function
+        //      return 0;
+        //  }
+
+        let mut scope = ScopeMap::new(Some(scope));
+        let mut params = Vec::with_capacity(decl.params.len());
+        for arg in &decl.params {
+            let arg_ = self.make_temporary_var(&arg);
+            scope.insert(Rc::clone(&arg), Rc::clone(&arg_));
+            params.push(arg_);
+        }
+
+        Ok(ast::FunctionDeclaration {
+            name: decl.name,
+            params,
+            body: decl.body.map(|b| {
+                let block = self.resolve_block(b, &mut scope, None)?;
+                let block = self.resolve_goto(block)?;
+                Ok(block)
+            }).transpose()?
         })
     }
 
@@ -173,8 +237,8 @@ impl AnalysisState {
             Statement::While(condition, body, id) => {
                 assert_eq!(id, None);
 
-                let id = self.loop_id;
-                self.loop_id += 1;
+                let id = self.loop_id_increment;
+                self.loop_id_increment += 1;
 
                 Statement::While(
                     self.resolve_expr(condition, scope)?,
@@ -204,8 +268,8 @@ impl AnalysisState {
             Statement::DoWhile(cond, body,id) => {
                 assert_eq!(id, None);
 
-                let id = self.loop_id;
-                self.loop_id += 1;
+                let id = self.loop_id_increment;
+                self.loop_id_increment += 1;
 
                 Statement::DoWhile(
                     self.resolve_expr(cond, scope)?,
@@ -218,14 +282,14 @@ impl AnalysisState {
 
                 let scope = &mut ScopeMap::new(Some(scope));
 
-                let id = self.loop_id;
-                self.loop_id += 1;
+                let id = self.loop_id_increment;
+                self.loop_id_increment += 1;
 
                 Statement::ForLoop(
                     expr1.map(|b| {
                         Ok(match b {
-                            ForInitializer::Decl(d) => ForInitializer::Decl(self.resolve_declaration(d, scope)?),
-                            ForInitializer::Expr(e) => ForInitializer::Expr(self.resolve_expr(e, scope)?),
+                            ast::ForInitializer::Decl(d) => ast::ForInitializer::Decl(self.resolve_variable_declaration(d, scope)?),
+                            ast::ForInitializer::Expr(e) => ast::ForInitializer::Expr(self.resolve_expr(e, scope)?),
                         })
                     }).transpose()?,
                     expr2.map(|x| self.resolve_expr(x, scope)).transpose()?,
@@ -326,6 +390,30 @@ impl AnalysisState {
                     Box::new(self.resolve_expr(*otherwise, scope)?)
                 )
             },
+            Expr::FunCall(ident, args) => {
+                if !self.function_map.contains_key(&ident) {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::UndeclaredFunction(ident)
+                    });
+                }
+
+                let arity = self.function_map.get(&ident).unwrap().arity;
+                if arity != args.len() {
+                    return Err(SemanticAnalysisError {
+                        reason: SemanticAnalysisErrorKind::WrongFunctionArity(ident, arity, args.len())
+                    });
+                }
+
+                let mut args_ = Vec::with_capacity(args.len());
+                for arg in args {
+                    args_.push(self.resolve_expr(arg, scope)?);
+                }
+
+                Expr::FunCall(
+                    ident,
+                    args_
+                )
+            }
         })
     }
 

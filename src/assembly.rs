@@ -5,7 +5,7 @@ use crate::ir::Val;
 
 #[derive(Debug)]
 pub struct Program {
-    pub function_definition: FunctionDefinition,
+    pub function_definitions: Vec<FunctionDefinition>,
 }
 
 #[derive(Debug)]
@@ -28,6 +28,9 @@ pub enum Instruction {
     Cdq,
     AllocateStack(usize),
     Ret,
+    Push(Operand),
+    Call(Identifier),
+    DeallocateStack(usize),
 }
 
 #[derive(Debug)]
@@ -57,22 +60,56 @@ pub enum BinaryOp {
     Add, Sub, Mult, And, Or, Xor, LShift, RShift,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum Register {
     AX,
-    R10,
-    R11,
     DX,
     CX,
+    DI,
+    SI,
+    R8,
+    R9,
+    R10,
+    R11,
 }
 
+const CALLING_CONVENTION_REGISTERS: [Register; 6] =
+    [Register::DI, Register::SI, Register::DX, Register::CX, Register::R8, Register::R9];
+
 pub fn to_assembly_program(prog: ir::Program) -> Program {
-    let name = Rc::clone(&prog.function_definition.name);
+    let mut functions = Vec::with_capacity(prog.function_definitions.len());
+
+    for f in prog.function_definitions {
+        functions.push(FunctionDefinition {
+            name: Rc::clone(&f.name),
+            instructions: to_assembly_function(f),
+        });
+    }
+
+    Program {
+        function_definitions: functions,
+    }
+}
+
+fn to_assembly_function(f: ir::Function) -> Vec<Instruction> {
     let mut instructions = Vec::new();
 
     // first pass
     {
-        for inst in &prog.function_definition.body {
+        for (i, arg) in f.params.iter().enumerate() {
+            // find where the argument is (either in a register, or on the stack after we run out of
+            // registers
+            let location = CALLING_CONVENTION_REGISTERS.get(i)
+                .map(|x| Operand::Reg(*x))
+                .unwrap_or_else(|| Operand::Stack(16 + (i - 6) * 8));
+
+            instructions.push(Instruction::Mov(
+                location,
+                Operand::Pseudo(Rc::clone(&arg))
+            ));
+        }
+
+        for inst in &f.body {
             use ir::Instruction as I;
             match inst {
                 I::Return(val) => {
@@ -332,6 +369,68 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                         convert_val(dst),
                     ));
                 },
+                I::FunCall(name, args, dst) => {
+                    let (register_args, stack_args) = {
+                        if args.len() < 6 {
+                            (&args[0..], &[] as &[Val])
+                        } else {
+                            args.split_at(6)
+                        }
+                    };
+
+                    let stack_padding = if stack_args.len() % 2 != 0 {
+                        8
+                    } else {
+                        0
+                    };
+
+                    if stack_padding != 0 {
+                        instructions.push(Instruction::AllocateStack(
+                            stack_padding
+                        ));
+                    }
+
+                    for (i, arg) in register_args.iter().enumerate() {
+                        let assembly_arg = convert_val(arg);
+                        instructions.push(Instruction::Mov(
+                            assembly_arg,
+                            Operand::Reg(CALLING_CONVENTION_REGISTERS[i])
+                        ));
+                    }
+
+                    for arg in stack_args.iter().rev() {
+                        let assembly_arg = convert_val(arg);
+
+                        match &assembly_arg {
+                            Operand::Reg(_) | Operand::Imm(_) => {
+                                instructions.push(Instruction::Push(
+                                    assembly_arg
+                                ));
+                            }
+                            _ => {
+                                instructions.push(Instruction::Mov(
+                                    assembly_arg,
+                                    Operand::Reg(Register::AX),
+                                ));
+                                instructions.push(Instruction::Push(
+                                    Operand::Reg(Register::AX)
+                                ));
+                            }
+                        }
+
+
+                    }
+                    instructions.push(Instruction::Call(Rc::clone(&name)));
+                    let bytes_to_rm = 8 * stack_args.len() + stack_padding;
+                    if bytes_to_rm != 0 {
+                        instructions.push(Instruction::DeallocateStack(bytes_to_rm));
+                    }
+
+                    instructions.push(Instruction::Mov(
+                        Operand::Reg(Register::AX),
+                        convert_val(dst)
+                    ));
+                },
             }
         }
     }
@@ -371,13 +470,18 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
                     convert_pseudoregister(val, &mut pr_map, &mut stack_offset);
                 }
                 Instruction::Label(_) => {}
+                Instruction::Push(val) => {
+                    convert_pseudoregister(val, &mut pr_map, &mut stack_offset);
+                }
+                Instruction::Call(_) => {}
+                Instruction::DeallocateStack(_) => {}
             }
         }
     }
     // third pass - add AllocateStack instruction, fix various x86 instruction restraints
     let instructions = {
         let mut instructions_ = Vec::with_capacity(instructions.capacity() + 1);
-        instructions_.push(Instruction::AllocateStack(stack_offset));
+        instructions_.push(Instruction::AllocateStack(16 * (stack_offset/16))); // round up stack size to nearest multiple of 16
 
         for inst in instructions {
             match inst {
@@ -489,12 +593,7 @@ pub fn to_assembly_program(prog: ir::Program) -> Program {
         instructions_
     };
 
-    Program {
-        function_definition: FunctionDefinition {
-            name,
-            instructions
-        }
-    }
+    instructions
 }
 
 fn convert_val(val: &ir::Val) -> Operand {

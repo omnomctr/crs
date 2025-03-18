@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use super::{Lexer, ParserError, ParserErrorKind, Token, TokenType, UnexpectedToken};
 use crate::ast;
-use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, ForInitializer, IfStatement, Incrementation, Statement, UnaryOp};
+use crate::ast::{BinaryOp, BlockItem, Declaration, Expr, ForInitializer, FunctionDeclaration, IfStatement, Incrementation, Statement, UnaryOp, VariableDeclaration};
 
 pub struct Parser<'a> {
     lex: Peekable<&'a mut Lexer<'a>>,
@@ -31,10 +31,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_program(&mut self) -> Result<ast::Program, ParserError> {
-        let f = self.parse_function()?;
-        self.eat(TokenType::Eof)?;
+        let mut func_defs = Vec::new();
+        while self.current_token.kind != TokenType::Eof {
+            func_defs.push(self.parse_function()?);
+        }
 
-        Ok(ast::Program { f })
+        Ok(ast::Program {
+            functions: func_defs,
+        })
     }
 
     fn eat(&mut self, expected: TokenType) -> Result<(), ParserError> {
@@ -69,19 +73,37 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function(&mut self) -> Result<ast::Function, ParserError> {
+    fn parse_function(&mut self) -> Result<ast::FunctionDeclaration, ParserError> {
         self.eat(TokenType::IntKeyword)?;
 
         let name = self.eat_ident()?;
 
         self.eat(TokenType::LParen)?;
-        self.eat(TokenType::VoidKeyword)?;
+        let mut params = Vec::new();
+        if self.current_token.kind == TokenType::VoidKeyword {
+            self.eat(TokenType::VoidKeyword)?;
+        } else if self.current_token.kind != TokenType::RParen {
+            loop {
+                self.eat(TokenType::IntKeyword)?;
+                params.push(self.eat_ident()?);
+                if self.current_token.kind != TokenType::RParen {
+                    self.eat(TokenType::Comma)?
+                } else {
+                    break;
+                }
+            }
+        }
         self.eat(TokenType::RParen)?;
 
-        let body = self.parse_block()?;
+        let body = if self.current_token.kind == TokenType::LSquirly {
+            Some(self.parse_block()?)
+        } else {
+            self.eat(TokenType::Semicolon)?;
+            None
+        };
 
-        Ok(ast::Function {
-            name, body,
+        Ok(ast::FunctionDeclaration {
+            name, params, body,
         })
     }
 
@@ -109,21 +131,50 @@ impl<'a> Parser<'a> {
         self.eat(TokenType::IntKeyword)?;
         let ident = self.eat_ident()?;
 
-        /* optional =, otherwise it's just a declaration */
-        if self.current_token.kind != TokenType::Assignment {
-            self.eat(TokenType::Semicolon)?;
-            Ok(Declaration {
-                name: ident,
-                initializer: None,
-            })
-        } else {
+        if self.current_token.kind == TokenType::Assignment {
             self.eat(TokenType::Assignment)?;
             let expr = self.parse_expr()?;
             self.eat(TokenType::Semicolon)?;
-            Ok(Declaration {
+            Ok(Declaration::Var(VariableDeclaration{
                 name: ident,
                 initializer: Some(expr),
-            })
+            }))
+
+        } else if self.current_token.kind == TokenType::LParen {
+            self.eat(TokenType::LParen)?;
+            let mut params = Vec::new();
+            if self.current_token.kind != TokenType::RParen {
+                loop {
+                    self.eat(TokenType::IntKeyword)?;
+                    params.push(self.eat_ident()?);
+                    if self.current_token.kind != TokenType::RParen {
+                        self.eat(TokenType::Comma)?;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            self.eat(TokenType::RParen)?;
+
+            let body = if self.current_token.kind == TokenType::LSquirly {
+                Some(self.parse_block()?)
+            } else {
+                self.eat(TokenType::Semicolon)?;
+                None
+            };
+
+            Ok(ast::Declaration::Fun(FunctionDeclaration {
+                name: ident,
+                params,
+                body
+            }))
+        } else {
+            self.eat(TokenType::Semicolon)?;
+            Ok(ast::Declaration::Var(VariableDeclaration {
+                name: ident,
+                initializer: None,
+            }))
         }
     }
 
@@ -240,7 +291,15 @@ impl<'a> Parser<'a> {
                     self.eat(TokenType::Semicolon)?;
                     None
                 } else if self.current_token.kind == TokenType::IntKeyword {
-                    Some(ForInitializer::Decl(self.parse_declaration()?))
+                    if let ast::Declaration::Var(v) = self.parse_declaration()? {
+                        Some(ForInitializer::Decl(v))
+                    } else {
+                        return Err(ParserError::new(
+                            self.current_token.line_num,
+                            ParserErrorKind::BadForm,
+                            self.filename,
+                        ));
+                    }
                 } else {
                     let expr = self.parse_expr()?;
                     self.eat(TokenType::Semicolon)?;
@@ -290,6 +349,20 @@ impl<'a> Parser<'a> {
                 } else if self.current_token.kind == TokenType::Dec {
                     self.eat(TokenType::Dec)?;
                     Expr::PostfixInc(Incrementation::Decrement, Box::new(Expr::Var(ident)))
+                } else if self.current_token.kind == TokenType::LParen {
+                    self.eat(TokenType::LParen)?;
+                    let mut args = Vec::new();
+                    while self.current_token.kind != TokenType::RParen {
+                        args.push(self.parse_expr()?);
+                        if self.current_token.kind != TokenType::RParen {
+                            self.eat(TokenType::Comma)?;
+                        } else {
+                            break;
+                        }
+                    }
+                    self.eat(TokenType::RParen)?;
+
+                    Expr::FunCall(ident, args)
                 } else {
                     Expr::Var(ident)
                 }

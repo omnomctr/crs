@@ -1,17 +1,18 @@
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, Expr, ForInitializer, IfStatement, Incrementation, Statement};
+use crate::ast::{BlockItem, Declaration, Expr, ForInitializer, FunctionDeclaration, IfStatement, Incrementation, Statement, VariableDeclaration};
 
 
 #[derive(Debug)]
 pub struct Program {
-    pub function_definition: Function,
+    pub function_definitions: Vec<Function>,
 }
 
 #[derive(Debug)]
 pub struct Function {
     pub name: Identifier,
+    pub params: Vec<Identifier>,
     pub body: Vec<Instruction>,
 }
 
@@ -24,7 +25,8 @@ pub enum Instruction {
     Jump(Label), /* target */
     JumpZero(Val, Label), /* condition, target */
     JumpNotZero(Val, Label), /* condition, target */
-    Label(Label)
+    Label(Label),
+    FunCall(Identifier, Vec<Val>, Val), /* name, args, dst */
 }
 
 #[derive(Debug, Clone)]
@@ -69,14 +71,30 @@ type Identifier = Rc<String>;
 type Label = Rc<String>;
 
 pub fn emit_ir(prog: ast::Program) -> Program {
-    let name = Rc::clone(&prog.f.name);
     let mut state = EmitterState {
         tmp_namen: 0,
         tmp_labeln: 0,
     };
 
+    let mut functions = Vec::with_capacity(prog.functions.len());
+    for f in prog.functions {
+        functions.push(emit_function(f, &mut state));
+    }
+
+    Program {
+        function_definitions: functions,
+    }
+}
+
+fn emit_function(f: ast::FunctionDeclaration, es: &mut EmitterState) -> Function {
+    let name = Rc::clone(&f.name);
+
+
     let mut insts = Vec::new();
-    emit_block(prog.f.body, &mut state, &mut insts);
+    if let Some(body) = f.body {
+        emit_block(body, es, &mut insts);
+    }
+
 
     // if it's the main function and it doesn't have a return
     // the standard tells us we need to add it automatically
@@ -87,12 +105,10 @@ pub fn emit_ir(prog: ast::Program) -> Program {
         }
     }
 
-
-    Program {
-        function_definition: Function {
-            name: Rc::clone(&name),
-            body: insts
-        }
+    Function {
+        name,
+        params: f.params,
+        body: insts,
     }
 }
 
@@ -100,14 +116,16 @@ fn emit_block(block: ast::Block, state: &mut EmitterState, insts: &mut Vec<Instr
     for item in block {
         match item {
             BlockItem::S(stmt) => emit_statement(stmt, state, insts),
-            BlockItem::D(ast::Declaration { name, initializer: Some(e) }) => {
+            BlockItem::D(ast::Declaration::Var (VariableDeclaration{ name, initializer: Some(e) })) => {
                 let result = emit_expr(&e, state, insts);
                 insts.push(Instruction::Copy(
                     result,
                     Val::Var(Rc::clone(&name))
                 ));
             },
-            BlockItem::D(ast::Declaration { name: _, initializer: None }) => ()
+            BlockItem::D(ast::Declaration::Var(VariableDeclaration { name: _, initializer: None })) => (),
+            BlockItem::D(Declaration::Fun(FunctionDeclaration { body: Some(_), .. })) => panic!(),
+            BlockItem::D(Declaration::Fun(_)) => (),
         }
     }
 
@@ -257,7 +275,8 @@ fn emit_statement(stmt: ast::Statement, es: &mut EmitterState, insts: &mut Vec<I
                 match expr1 {
                     ForInitializer::Decl(x) => {
                         // I cant be bothered to write this better
-                        emit_block(vec![BlockItem::D(x)], es, insts);
+
+                        emit_block(vec![BlockItem::D(Declaration::Var(x))], es, insts);
                     }
                     ForInitializer::Expr(e) => {
                         emit_expr(&e, es, insts);
@@ -561,6 +580,30 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             result
         }
+        Expr::FunCall(ident, args) => {
+            /*
+                arg1 = <eval arg1>
+                arg2 = <eval arg2>
+                ...
+                argN = <eval argN>
+
+                result = FunCall(ident, [arg1, arg2, ..., argN])
+             */
+
+            let result = make_temporary_val(es);
+            let mut arg_handles = Vec::with_capacity(args.len());
+            for arg in args {
+                arg_handles.push(emit_expr(arg, es, insts));
+            }
+
+            insts.push(Instruction::FunCall(
+                Rc::clone(&ident),
+                arg_handles,
+                result.clone()
+            ));
+
+            result
+        }
     }
 }
 
@@ -611,8 +654,25 @@ fn convert_binary(op: &ast::BinaryOp) -> BinaryOp {
 
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} (\n", self.function_definition.name)?;
-        for inst in &self.function_definition.body {
+        let mut fs = self.function_definitions.iter().peekable();
+        while fs.peek().is_some() {
+            write!(f, "{}{}", fs.next().unwrap(), if fs.peek().is_some() { ",\n" } else { "" })?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        write!(f," (")?;
+        let mut params_iter = self.params.iter().peekable();
+        while params_iter.peek().is_some() {
+            write!(f, "{}{}", params_iter.next().unwrap(), if params_iter.peek().is_some() { ", " } else { "" })?;
+        }
+        write!(f, ") ")?;
+        write!(f, "(\n")?;
+        for inst in &self.body {
             write!(f, "{}\n", inst)?;
         }
         write!(f, ")")?;
@@ -631,6 +691,14 @@ impl Display for Instruction {
             Instruction::JumpZero(condition, target) => write!(f, "\tif {} = 0 jmp {}", condition, target),
             Instruction::JumpNotZero(condition, target) => write!(f, "\tif {} != 0 jmp {}", condition, target),
             Instruction::Label(ident) => write!(f, "{}:", ident),
+            Instruction::FunCall(ident, params, dest) => {
+                write!(f, "\t{} = call {}(", dest, ident)?;
+                let mut fs = params.iter().peekable();
+                while fs.peek().is_some() {
+                    write!(f, "{}{}", fs.next().unwrap(), if fs.peek().is_some() { ", " } else { "" })?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }

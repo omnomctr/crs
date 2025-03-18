@@ -4,19 +4,28 @@ use std::io::BufWriter;
 use crate::assembly;
 use crate::assembly::{BinaryOp, Condition, Instruction, Operand, Register, UnaryOp};
 use std::io::Write;
-use crate::emit::WordSize::{DWORD, WORD};
+use crate::emit::WordSize::{DWORD, QWORD, WORD};
 
 pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
     let mut writer = BufWriter::new(f);
 
-    write!(&mut writer, "\t.globl {}\n", prog.function_definition.name)?;
-    write!(&mut writer, "{}:\n", prog.function_definition.name)?;
-    write!(&mut writer, "\tpushq  %rbp\n\tmovq   %rsp, %rbp\n")?;
-
-    for inst in prog.function_definition.instructions {
-        emit_instruction(&mut writer, inst)?;
-        write!(&mut writer, "\n")?;
+    for f in &prog.function_definitions {
+        write!(&mut writer, "\t.globl {}\n", f.name)?;
     }
+    write!(&mut writer, "\n")?;
+
+    for f in &prog.function_definitions {
+        write!(&mut writer, "{}:\n", f.name)?;
+        write!(&mut writer, "\tpushq  %rbp\n\tmovq   %rsp, %rbp\n")?;
+
+        for inst in &f.instructions {
+            emit_instruction(&mut writer, inst)?;
+            write!(&mut writer, "\n")?;
+        }
+    }
+
+ //   write!(&mut writer, "\t.globl {}\n", prog.function_definition.name)?;
+
 
     write!(&mut writer, ".section .note.GNU-stack,\"\",@progbits\n")?;
 
@@ -24,7 +33,7 @@ pub fn emit(f: File, prog: assembly::Program) -> std::io::Result<()> {
     Ok(())
 }
 
-fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -> std::io::Result<()> {
+fn emit_instruction(writer: &mut BufWriter<File>, inst: &assembly::Instruction) -> std::io::Result<()> {
     match inst {
         Instruction::Mov(src, dest) => {
             write!(writer, "\tmovl   ")?;
@@ -53,12 +62,12 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
             emit_operand(writer, op, WORD)?;
         },
         Instruction::Binary(op, rhs, dst) => {
-            if op == BinaryOp::LShift  {
+            if *op == BinaryOp::LShift  {
                 write!(writer, "\tshll   ")?;
                 emit_operand(writer, rhs, WORD)?;
                 write!(writer, ", ")?;
                 emit_operand(writer, dst, DWORD)?;
-            } else if op == BinaryOp::RShift {
+            } else if *op == BinaryOp::RShift {
                 write!(writer, "\tshrl   ")?;
                 emit_operand(writer, rhs, WORD)?;
                 write!(writer, ", ")?;
@@ -101,15 +110,25 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: assembly::Instruction) -
         Instruction::Label(lbl) => {
             write!(writer, ".L{}:", lbl)?;
         }
+        Instruction::Push(op) => {
+            write!(writer, "\tpushq   ")?;
+            emit_operand(writer, op, QWORD)?;
+        }
+        Instruction::Call(name) => {
+            write!(writer, "\tcall {}", name)?;
+        }
+        Instruction::DeallocateStack(i) => {
+            write!(writer, "\taddq   ${}, %rsp", i)?;
+        }
     }
 
     Ok(())
 }
 
-fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand, word_size: WordSize) -> std::io::Result<()> {
+fn emit_operand(writer: &mut BufWriter<File>, op: &assembly::Operand, word_size: WordSize) -> std::io::Result<()> {
     match op {
         Operand::Imm(i) => write!(writer, "${}", i)?,
-        Operand::Reg(r) => emit_register(writer, r, word_size)?,
+        Operand::Reg(r) => emit_register(writer, *r, word_size)?,
         Operand::Stack(i) => write!(writer, "-{}(%rbp)", i)?,
         Operand::Pseudo(_) => panic!(),
     }
@@ -118,10 +137,23 @@ fn emit_operand(writer: &mut BufWriter<File>, op: assembly::Operand, word_size: 
 }
 
 enum WordSize {
-    DWORD, WORD,
+    DWORD, WORD, QWORD
 }
 fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register, word_size: WordSize) -> std::io::Result<()> {
     match word_size {
+        WordSize::QWORD => {
+            match reg {
+                Register::AX => write!(writer, "%rax"),
+                Register::DX => write!(writer, "%rdx"),
+                Register::CX => write!(writer, "%rcx"),
+                Register::DI => write!(writer, "%rdi"),
+                Register::SI => write!(writer, "%rsi"),
+                Register::R8 => write!(writer, "%r8"),
+                Register::R9 => write!(writer, "%r9"),
+                Register::R10 => write!(writer, "%r10"),
+                Register::R11 => write!(writer, "%r11"),
+            }
+        },
         WordSize::DWORD => {
             match reg {
                 Register::AX => write!(writer, "%eax"),
@@ -129,6 +161,10 @@ fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register, word_siz
                 Register::R11 => write!(writer, "%r11d"),
                 Register::DX => write!(writer, "%edx"),
                 Register::CX => write!(writer, "%ecx"),
+                Register::DI => write!(writer, "%edi"),
+                Register::SI => write!(writer, "%esi"),
+                Register::R8 => write!(writer, "%r8d"),
+                Register::R9 => write!(writer, "%r9d"),
             }
         },
         WordSize::WORD => {
@@ -138,6 +174,10 @@ fn emit_register(writer: &mut BufWriter<File>, reg: assembly::Register, word_siz
                 Register::R11 => write!(writer, "%r11b"),
                 Register::DX => write!(writer, "%dl"),
                 Register::CX => write!(writer, "%cl"),
+                Register::DI => write!(writer, "%dil"),
+                Register::SI => write!(writer, "%sil"),
+                Register::R8 => write!(writer, "%r8b"),
+                Register::R9 => write!(writer, "%r9b"),
             }
         }
     }

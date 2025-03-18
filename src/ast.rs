@@ -2,13 +2,7 @@ use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Program {
-    pub f: Function
-}
-
-#[derive(Debug)]
-pub struct Function {
-    pub name: Identifier,
-    pub body: Block
+    pub functions: Vec<FunctionDeclaration>,
 }
 
 pub(crate) type Block = Vec<BlockItem>;
@@ -37,7 +31,7 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum ForInitializer {
-    Decl(Declaration),
+    Decl(VariableDeclaration),
     Expr(Expr)
 }
 
@@ -49,10 +43,24 @@ pub struct IfStatement {
 }
 
 #[derive(Debug)]
-pub struct Declaration {
+pub enum Declaration {
+    Fun(FunctionDeclaration),
+    Var(VariableDeclaration),
+}
+
+#[derive(Debug)]
+pub struct VariableDeclaration {
     pub name: Identifier,
     pub initializer: Option<Expr>,
 }
+
+#[derive(Debug)]
+pub struct FunctionDeclaration {
+    pub name: Identifier,
+    pub params: Vec<Identifier>,
+    pub body: Option<Block>,
+}
+
 
 #[derive(Debug)]
 pub enum Expr {
@@ -65,6 +73,7 @@ pub enum Expr {
     PrefixInc(Incrementation, Box<Expr>), /* ++x / --x */
     PostfixInc(Incrementation, Box<Expr>), /* x++ / x-- */
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>), /* condition ? then : else */
+    FunCall(Identifier, Vec<Expr>),
 }
 
 pub type Identifier = Rc<String>;

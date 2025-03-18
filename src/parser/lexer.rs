@@ -60,6 +60,7 @@ pub enum TokenType {
     Continue,
     Do,
     For,
+    Comma,
 }
 
 #[derive(Debug)]
@@ -171,6 +172,7 @@ impl<'a> Lexer<'a> {
             '>' => Tok::GT,
             '?' => Tok::QuestionMark,
             ':' => Tok::Colon,
+            ',' => Tok::Comma,
             x => {
                 if self.ch.is_digit(10) {
                     return self.read_constant();
