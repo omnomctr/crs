@@ -29,7 +29,7 @@ pub enum Instruction {
     AllocateStack(usize),
     Ret,
     Push(Operand),
-    Call(Identifier),
+    Call(Identifier, bool), // func name, extern?
     DeallocateStack(usize),
 }
 
@@ -369,7 +369,7 @@ fn to_assembly_function(f: ir::Function) -> Vec<Instruction> {
                         convert_val(dst),
                     ));
                 },
-                I::FunCall(name, args, dst) => {
+                I::FunCall(name, args, dst, externn) => {
                     let (register_args, stack_args) = {
                         if args.len() < 6 {
                             (&args[0..], &[] as &[Val])
@@ -420,7 +420,7 @@ fn to_assembly_function(f: ir::Function) -> Vec<Instruction> {
 
 
                     }
-                    instructions.push(Instruction::Call(Rc::clone(&name)));
+                    instructions.push(Instruction::Call(Rc::clone(&name), *externn));
                     let bytes_to_rm = 8 * stack_args.len() + stack_padding;
                     if bytes_to_rm != 0 {
                         instructions.push(Instruction::DeallocateStack(bytes_to_rm));
@@ -473,7 +473,7 @@ fn to_assembly_function(f: ir::Function) -> Vec<Instruction> {
                 Instruction::Push(val) => {
                     convert_pseudoregister(val, &mut pr_map, &mut stack_offset);
                 }
-                Instruction::Call(_) => {}
+                Instruction::Call(_, _) => {}
                 Instruction::DeallocateStack(_) => {}
             }
         }

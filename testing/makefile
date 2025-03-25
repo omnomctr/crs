@@ -1,8 +1,5 @@
-out: crt.o main.o
-	ld crt.o main.o -o out
-
-crt.o: crt.asm
-	nasm crt.asm -f elf64
+out:  main.o testing.o
+	gcc  main.o testing.o -o out
 
 main.o: main
 	as main -o main.o
@@ -10,5 +7,8 @@ main.o: main
 main: main.c ../target/debug/crs
 	../target/debug/crs main.c
 
+testing.o: testing.c
+	gcc -c testing.c -o testing.o
+
 clean:
-	rm out main main.o crt.o
+	rm -f out main main.o testing.o

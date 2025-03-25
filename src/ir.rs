@@ -26,7 +26,7 @@ pub enum Instruction {
     JumpZero(Val, Label), /* condition, target */
     JumpNotZero(Val, Label), /* condition, target */
     Label(Label),
-    FunCall(Identifier, Vec<Val>, Val), /* name, args, dst */
+    FunCall(Identifier, Vec<Val>, Val, bool), /* name, args, dst, external linkage? */
 }
 
 #[derive(Debug, Clone)]
@@ -78,7 +78,10 @@ pub fn emit_ir(prog: ast::Program) -> Program {
 
     let mut functions = Vec::with_capacity(prog.functions.len());
     for f in prog.functions {
-        functions.push(emit_function(f, &mut state));
+        if let Some(_) = f.body {
+            functions.push(emit_function(f, &mut state));
+        }
+
     }
 
     Program {
@@ -580,7 +583,8 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
 
             result
         }
-        Expr::FunCall(ident, args) => {
+        Expr::FunCall(_, _, None) => panic!(),
+        Expr::FunCall(ident, args, Some(external)) => {
             /*
                 arg1 = <eval arg1>
                 arg2 = <eval arg2>
@@ -599,7 +603,8 @@ fn emit_expr(expr: &ast::Expr, es: &mut EmitterState, insts: &mut Vec<Instructio
             insts.push(Instruction::FunCall(
                 Rc::clone(&ident),
                 arg_handles,
-                result.clone()
+                result.clone(),
+                *external
             ));
 
             result
@@ -664,7 +669,7 @@ impl Display for Program {
 
 impl Display for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)?;
+        write!(f, "func {}", self.name)?;
         write!(f," (")?;
         let mut params_iter = self.params.iter().peekable();
         while params_iter.peek().is_some() {
@@ -691,8 +696,8 @@ impl Display for Instruction {
             Instruction::JumpZero(condition, target) => write!(f, "\tif {} = 0 jmp {}", condition, target),
             Instruction::JumpNotZero(condition, target) => write!(f, "\tif {} != 0 jmp {}", condition, target),
             Instruction::Label(ident) => write!(f, "{}:", ident),
-            Instruction::FunCall(ident, params, dest) => {
-                write!(f, "\t{} = call {}(", dest, ident)?;
+            Instruction::FunCall(ident, params, dest, external) => {
+                write!(f, "\t{} = call {}{}(", dest, if *external {"extern "} else {""}, ident)?;
                 let mut fs = params.iter().peekable();
                 while fs.peek().is_some() {
                     write!(f, "{}{}", fs.next().unwrap(), if fs.peek().is_some() { ", " } else { "" })?;

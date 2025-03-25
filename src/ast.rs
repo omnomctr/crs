@@ -70,10 +70,10 @@ pub enum Expr {
     Var(Identifier),
     Assignment(Box<Expr>, Box<Expr>), /* lvalue, '=', rvalue */
     CompoundAssignment(BinaryOp, Box<Expr>, Box<Expr>), /* op, lvalue, rvalue */
-    PrefixInc(Incrementation, Box<Expr>), /* ++x / --x */
-    PostfixInc(Incrementation, Box<Expr>), /* x++ / x-- */
+    PrefixInc(Incrementation, Box<Expr>), /* x is an lvalue: ++x / --x */
+    PostfixInc(Incrementation, Box<Expr>), /* x is an lvalue: x++ / x-- */
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>), /* condition ? then : else */
-    FunCall(Identifier, Vec<Expr>),
+    FunCall(Identifier, Vec<Expr>, Option<bool>), /* name, params, extern? (done in semantic analysis */
 }
 
 pub type Identifier = Rc<String>;

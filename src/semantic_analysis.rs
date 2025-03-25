@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::ast;
-use crate::ast::{BlockItem, Declaration, IfStatement, Statement};
+use crate::ast::{BlockItem, Declaration, ForInitializer, IfStatement, Statement};
 
 struct AnalysisState {
     label_map: HashMap<ast::Identifier, ast::Identifier>,
@@ -32,6 +32,7 @@ pub enum SemanticAnalysisErrorKind {
     UndeclaredFunction(ast::Identifier),
 }
 
+#[derive(Debug)]
 pub struct FunctionEntry {
     has_body: bool,
     arity: usize,
@@ -105,8 +106,15 @@ pub fn analyse(ast: ast::Program) -> AnalysisResult<ast::Program> {
         functions.push(state.resolve_function_declaration(function, &mut scope)?);
     }
 
+    /* semantic analysis second pass */
+    /* here we resolve whether or not function calls are external */
+    let mut functions_ = Vec::with_capacity(functions.len());
+    for function in functions {
+        functions_.push(state.second_pass_resolve_function_declaration(function)?)
+    }
+
     Ok(ast::Program {
-        functions
+        functions: functions_,
     })
 }
 
@@ -154,7 +162,7 @@ impl AnalysisState {
 
     fn resolve_function_declaration(&mut self, decl: ast::FunctionDeclaration, scope: &mut ScopeMap) -> AnalysisResult<ast::FunctionDeclaration> {
         // function is already defined
-        match self.function_map.get(&decl.name) {
+        match self.function_map.get_mut(&decl.name) {
             Some(FunctionEntry { has_body: true, .. }) => {
                 return Err(SemanticAnalysisError {
                     reason: SemanticAnalysisErrorKind::DuplicateFunctionDefinition(decl.name),
@@ -168,6 +176,7 @@ impl AnalysisState {
             None => {
                 self.function_map.insert(Rc::clone(&decl.name), FunctionEntry { has_body: decl.body.is_some(), arity: decl.params.len() });
             },
+            Some(entry) if !entry.has_body => entry.has_body = true,
             _ => {}
         }
 
@@ -390,7 +399,8 @@ impl AnalysisState {
                     Box::new(self.resolve_expr(*otherwise, scope)?)
                 )
             },
-            Expr::FunCall(ident, args) => {
+            Expr::FunCall(_, _, Some(_)) => panic!(),
+            Expr::FunCall(ident, args, None) => {
                 if !self.function_map.contains_key(&ident) {
                     return Err(SemanticAnalysisError {
                         reason: SemanticAnalysisErrorKind::UndeclaredFunction(ident)
@@ -398,6 +408,7 @@ impl AnalysisState {
                 }
 
                 let arity = self.function_map.get(&ident).unwrap().arity;
+
                 if arity != args.len() {
                     return Err(SemanticAnalysisError {
                         reason: SemanticAnalysisErrorKind::WrongFunctionArity(ident, arity, args.len())
@@ -411,7 +422,8 @@ impl AnalysisState {
 
                 Expr::FunCall(
                     ident,
-                    args_
+                    args_,
+                    None,
                 )
             }
         })
@@ -478,6 +490,113 @@ impl AnalysisState {
             Statement::ForLoop(expr1, expr2, expr3, body, id) => {
                 Statement::ForLoop(expr1, expr2, expr3, Box::new(self.resolve_goto_statement(*body)?), id)
             }
+        })
+    }
+
+    fn second_pass_resolve_function_declaration(&mut self, f: ast::FunctionDeclaration) -> AnalysisResult<ast::FunctionDeclaration> {
+        Ok(
+            ast::FunctionDeclaration {
+                name: f.name,
+                params: f.params,
+                body: f.body.map(|b| self.second_pass_resolve_block(b)).transpose()?
+            }
+        )
+    }
+
+    fn second_pass_resolve_block(&mut self, block: ast::Block) -> AnalysisResult<ast::Block> {
+        let mut block_items = Vec::with_capacity(block.len());
+        for item in block {
+            match item {
+                // only looking for expressions (funcalls) here
+                BlockItem::S(s) => block_items.push(BlockItem::S(self.second_pass_resolve_statement(s)?)),
+                x @ BlockItem::D(_) => block_items.push(x)
+            }
+        }
+
+        Ok(block_items)
+    }
+    fn second_pass_resolve_statement(&mut self, s: ast::Statement) -> AnalysisResult<ast::Statement> {
+        use Statement as S;
+        Ok(match s {
+            S::Expression(e) => S::Expression(self.second_pass_resolve_expr(e)?),
+            S::Block(b) => S::Block(self.second_pass_resolve_block(b)?),
+            S::Return(e) => S::Return(self.second_pass_resolve_expr(e)?),
+            S::If(IfStatement { condition, then, otherwise }) => {
+                  S::If(IfStatement {
+                      condition: self.second_pass_resolve_expr(condition)?,
+                      then: self.second_pass_resolve_block(then)?,
+                      otherwise: otherwise.map(|b| self.second_pass_resolve_block(b)).transpose()?
+                  })
+            },
+            S::LabeledStatement(lbl, stmt) => S::LabeledStatement(lbl, Box::new(self.second_pass_resolve_statement(*stmt)?)),
+            S::While(e, s, lbl) => {
+                S::While(
+                    self.second_pass_resolve_expr(e)?,
+                    Box::new(self.second_pass_resolve_statement(*s)?),
+                    lbl
+                )
+            },
+            S::DoWhile(e, s, lbl) => {
+                S::DoWhile(
+                    self.second_pass_resolve_expr(e)?,
+                    Box::new(self.second_pass_resolve_statement(*s)?),
+                    lbl
+                )
+            },
+            S::ForLoop(e1, e2, e3, stmt, lbl) => {
+                S::ForLoop(
+                    e1.map(|fi| match fi {
+                        x @ ForInitializer::Decl(_) => Ok(x),
+                        ForInitializer::Expr(e) => Ok(ForInitializer::Expr(self.second_pass_resolve_expr(e)?))
+                    }).transpose()?,
+                    e2.map(|e| self.second_pass_resolve_expr(e)).transpose()?,
+                    e3.map(|e| self.second_pass_resolve_expr(e)).transpose()?,
+                    Box::new(self.second_pass_resolve_statement(*stmt)?),
+                    lbl,
+                )
+            }
+
+            x => x,
+        })
+    }
+    fn second_pass_resolve_expr(&mut self, expr: ast::Expr) -> AnalysisResult<ast::Expr> {
+        use ast::Expr as E;
+        Ok(match expr {
+            E::Unary(op, e) => E::Unary(op, Box::new(self.second_pass_resolve_expr(*e)?)),
+            E::Binary(op, lhs, rhs) => {
+                E::Binary(
+                    op,
+                    Box::new(self.second_pass_resolve_expr(*lhs)?),
+                    Box::new(self.second_pass_resolve_expr(*rhs)?),
+                )
+            },
+            E::Assignment(lval, rval) => E::Assignment(lval, Box::new(self.second_pass_resolve_expr(*rval)?)),
+            E::CompoundAssignment(op, lval, rval) => {
+                E::CompoundAssignment(op, lval, Box::new(self.second_pass_resolve_expr(*rval)?))
+            },
+            E::Ternary(cond, then, elsee) => {
+                E::Ternary(
+                    Box::new(self.second_pass_resolve_expr(*cond)?),
+                    Box::new(self.second_pass_resolve_expr(*then)?),
+                    Box::new(self.second_pass_resolve_expr(*elsee)?),
+                )
+            }
+            E::FunCall(_, _, Some(_)) => panic!(),
+            E::FunCall(ident, params, None) => {
+                E::FunCall(
+                    Rc::clone(&ident),
+                    {
+                        let mut params_ = Vec::with_capacity(params.len());
+                        for param in params {
+                            params_.push(self.second_pass_resolve_expr(param)?)
+                        }
+                        params_
+                    },
+                    // this is a little confusing but its external if it doesn't have a body
+                    Some(self.function_map.get(&ident).map_or(true, |entry| !entry.has_body)),
+                )
+            }
+            e => e,
         })
     }
 }

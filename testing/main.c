@@ -1,45 +1,19 @@
-int foo(int a, int b)
+int put_int(int n);
+
+int fib(int n)
 {
-    return a + b;
+    if (n == 1)
+        return 1;
+    else if (n <= 0)
+        return 0;
+    else
+        return fib(n - 1) + fib(n - 2);
 }
 
 int main()
 {
-    foo(1,2);
-    int a = 4;
-    int foo = 2;
-    a <<= 1;
-    a <<= 1;
-    a >>= 1;
-    a >>= 1;
-    int b = 32590;
-    b++;
-    --b;
+    for (int i = 1; i <= 15; i++)
+        put_int(fib(i));
 
-    if (b > 10) {
-        b ^= b;
-    } else {
-        return a;
-    }
-
-    int x = 0;
-    do {
-        x++;
-        int y = 0;
-        while (y++ < 100)
-            ;
-    } while (x <= 100);
-
-    int c = 4;
-    {
-        int c = 5;
-    }
-
-    for (x = 0; x < 1000; x++) {
-        for (int y = 0; y < x; y++)
-            ;
-        break;
-    }
-
-    return (x == b) ? 5 : x;
+    return 0;
 }

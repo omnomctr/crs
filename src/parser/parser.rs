@@ -362,7 +362,7 @@ impl<'a> Parser<'a> {
                     }
                     self.eat(TokenType::RParen)?;
 
-                    Expr::FunCall(ident, args)
+                    Expr::FunCall(ident, args, None)
                 } else {
                     Expr::Var(ident)
                 }

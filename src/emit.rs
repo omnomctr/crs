@@ -114,8 +114,8 @@ fn emit_instruction(writer: &mut BufWriter<File>, inst: &assembly::Instruction) 
             write!(writer, "\tpushq   ")?;
             emit_operand(writer, op, QWORD)?;
         }
-        Instruction::Call(name) => {
-            write!(writer, "\tcall {}", name)?;
+        Instruction::Call(name, externn) => {
+            write!(writer, "\tcall {}{}", name, if *externn { "@PLT" } else {""})?;
         }
         Instruction::DeallocateStack(i) => {
             write!(writer, "\taddq   ${}, %rsp", i)?;
